@@ -276,7 +276,7 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
     REDIS_PORT = os.environ.get("REDIS_PORT", "6379")
     REDIS_DB = os.environ.get("REDIS_DB", "0")
     REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "")
-    REDIS_URL = f"redis://{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+    REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
     REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (
                 "rest_framework.renderers.JSONRenderer",
