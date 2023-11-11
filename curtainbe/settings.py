@@ -48,7 +48,8 @@ INSTALLED_APPS = [
     'dbbackup',
     'storages',
     'request',
-    'django_rq'
+    'django_rq',
+    'django_extensions'
 
 ]
 
@@ -251,7 +252,7 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
         AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', 'your-spaces-endpoint-url')
         DBBACKUP_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
         DBBACKUP_STORAGE_OPTIONS = {
-            "access_key": os.environ.get('AWS_BACKUP_ACCESS_KEY_ID', AWS_SECRET_ACCESS_KEY),
+            "access_key": os.environ.get('AWS_BACKUP_ACCESS_KEY_ID', AWS_ACCESS_KEY_ID),
             "bucket_name": os.environ.get('AWS_BACKUP_STORAGE_BUCKET_NAME', AWS_STORAGE_BUCKET_NAME),
             "secret_key": os.environ.get('AWS_BACKUP_SECRET_KEY', AWS_SECRET_ACCESS_KEY),
             "endpoint_url": os.environ.get('AWS_BACKUP_S3_ENDPOINT_URL', AWS_S3_ENDPOINT_URL),
