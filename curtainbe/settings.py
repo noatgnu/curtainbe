@@ -216,7 +216,7 @@ STORAGES = {
 }
 
 if os.environ.get("WORKING_ENV") == "PRODUCTION":
-    DEBUG = False
+    DEBUG = True
     SECRET_KEY = os.environ.get("SECRET_KEY")
     ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "http://localhost,http://127.0.0.1").split(",")
     DATABASES = {
