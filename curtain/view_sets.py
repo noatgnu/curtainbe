@@ -178,6 +178,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 #    raise ValueError("No public key found")
             else:
                 curtain.encrypted = False
+                curtain.encryption_factors.all().delete()
             if "encryptedKey" in self.request.data and "encryptedIV" in self.request.data:
                 factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"], encrypted_decryption_key=self.request.data["encryptedKey"], curtain=curtain)
                 return factors
@@ -314,9 +315,12 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         c = self.get_object()
-
+        try:
+            factors = self.encrypt_data(c)
+        except ValueError as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
         if "enable" in self.request.data:
-            if self.request.data["enable"] == True:
+            if self.request.data["enable"] == "True":
                 c.enable = True
             else:
                 c.enable = False
@@ -328,7 +332,10 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
         if "description" in self.request.data:
             c.description = self.request.data["description"]
+
         c.save()
+        factors.curtain = c
+        factors.save()
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
         return Response(data=curtain_json.data)
 
