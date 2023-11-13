@@ -179,7 +179,10 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             else:
                 curtain.encrypted = False
             if "encryptedKey" in self.request.data and "encryptedIV" in self.request.data:
+
                 factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"], encrypted_decryption_key=self.request.data["encryptedKey"], curtain=curtain)
+                print(self.request.data["encryptedIV"])
+                print(self.request.data["encryptedKey"])
                 factors.save()
 
     @action(methods=["get"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
@@ -201,6 +204,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     def create(self, request, **kwargs):
         c = Curtain()
+        print(self.request.data)
         try:
             self.encrypt_data(c)
         except ValueError as e:
