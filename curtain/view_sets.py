@@ -179,11 +179,8 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             else:
                 curtain.encrypted = False
             if "encryptedKey" in self.request.data and "encryptedIV" in self.request.data:
-
                 factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"], encrypted_decryption_key=self.request.data["encryptedKey"], curtain=curtain)
-                print(self.request.data["encryptedIV"])
-                print(self.request.data["encryptedKey"])
-                factors.save()
+                return factors
 
     @action(methods=["get"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
     def get_encryption_factors(self, request, **kwargs):
@@ -204,6 +201,10 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     def create(self, request, **kwargs):
         c = Curtain()
+        try:
+            factors = self.encrypt_data(c)
+        except ValueError as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
         if type(self.request.user) != AnonymousUser:
             c.owners.add(self.request.user)
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
@@ -219,10 +220,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             c.curtain_type = self.request.data["curtain_type"]
 
         c.save()
-        try:
-            self.encrypt_data(c)
-        except ValueError as e:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+        if factors:
+            factors.curtain = c
+            factors.save()
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
         if type(self.request.user) != AnonymousUser:
             if settings.CURTAIN_DEFAULT_USER_LINK_LIMIT != 0:
