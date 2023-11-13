@@ -54,9 +54,6 @@ class Curtain(models.Model):
         default="TP"
     )
     encrypted = models.BooleanField(default=False)
-    encrypted_with = models.ForeignKey("UserPublicKey", on_delete=models.SET_NULL, blank=True, null=True,
-                                       related_name="curtain_encrypted_with")
-    md5 = models.TextField(blank=True, null=True)
 
 class SocialPlatform(models.Model):
     name = models.TextField()
@@ -87,3 +84,24 @@ class CurtainAccessToken(models.Model):
         null=True
     )
     token = models.TextField()
+
+
+class DataAESEncryptionFactors(models.Model):
+    created = models.DateTimeField(auto_now_add=True)
+    curtain = models.ForeignKey(
+        "Curtain", on_delete=models.CASCADE, related_name="encryption_factors",
+        blank=True,
+        null=True
+    )
+    encrypted_decryption_key = models.TextField()
+    encrypted_iv = models.TextField()
+    encrypted_with = models.ForeignKey("UserPublicKey", on_delete=models.SET_NULL, blank=True, null=True, related_name="encrypted_with")
+
+class DataHash(models.Model):
+    created = models.DateTimeField(auto_now_add=True)
+    curtain = models.ForeignKey(
+        "Curtain", on_delete=models.CASCADE, related_name="data_hash",
+        blank=True,
+        null=True
+    )
+    hash = models.TextField()

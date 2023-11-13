@@ -30,8 +30,8 @@ router.register(r'users', UserViewSet)
 router.register(r'kinase_library', KinaseLibraryViewSet)
 router.register(r'data_filter_list', DataFilterListViewSet)
 router.register(r'curtain', CurtainViewSet)
-router.register(r'userapikey', UserAPIKeyViewSets)
-router.register(r'userpublickey', UserPublicKeyViewSets)
+#router.register(r'userapikey', UserAPIKeyViewSets)
+#router.register(r'userpublickey', UserPublicKeyViewSets)
 
 urlpatterns = [
     path('', include(router.urls)),

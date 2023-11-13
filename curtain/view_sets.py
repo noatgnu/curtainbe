@@ -13,7 +13,7 @@ from django.contrib.auth.models import User, AnonymousUser
 from django.db.models import Q, Count
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page, never_cache
-#from django_sendfile import sendfile
+# from django_sendfile import sendfile
 from filters.mixins import FiltersMixin
 from rest_flex_fields import is_expanded
 from rest_flex_fields.views import FlexFieldsMixin
@@ -30,7 +30,8 @@ from rest_framework import status
 from django.db import transaction
 import io
 
-from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey
+from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
+    DataAESEncryptionFactors
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
     IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
@@ -59,7 +60,7 @@ class DataFilterListViewSet(FiltersMixin, viewsets.ModelViewSet):
     queryset = DataFilterList.objects.all()
     serializer_class = DataFilterListSerializer
     filter_backends = [filters.OrderingFilter]
-    permission_classes = [IsDataFilterListOwner|permissions.IsAuthenticatedOrReadOnly,]
+    permission_classes = [IsDataFilterListOwner | permissions.IsAuthenticatedOrReadOnly, ]
     parser_classes = [MultiPartParser, JSONParser]
     ordering_fields = ("id", "name", "category")
     ordering = ("name", "category", "id")
@@ -110,7 +111,7 @@ class DataFilterListViewSet(FiltersMixin, viewsets.ModelViewSet):
     @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
     def get_all_category(self, request, *args, **kwargs):
         categories = DataFilterList.objects.values("category").distinct()
-        #results = [i["category"] for i in categories if i["category"] != ""]
+        # results = [i["category"] for i in categories if i["category"] != ""]
         results = [i["category"] for i in categories if i["category"] != ""]
         return Response(data=results, )
 
@@ -120,7 +121,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
     serializer_class = CurtainSerializer
     filter_backends = [filters.OrderingFilter]
     parser_classes = [MultiPartParser, JSONParser]
-    permission_classes = [(permissions.IsAdminUser|IsNonUserPostAllow|IsCurtainOwnerOrPublic),]
+    permission_classes = [(permissions.IsAdminUser | IsNonUserPostAllow | IsCurtainOwnerOrPublic), ]
     lookup_field = 'link_id'
     ordering_fields = ("id", "created")
     ordering = ("created", "id")
@@ -139,7 +140,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
     def download(self, request, pk=None, link_id=None, token=None):
 
         c = self.get_object()
-        #return sendfile(request, c.file.url)
+        # return sendfile(request, c.file.url)
         # headers = {
         #     'Location': c.file.url,
         #     "Access-Control-Allow-Origin": request.headers['Origin'],
@@ -161,28 +162,49 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     def encrypt_data(self, curtain):
         if "encrypted" in self.request.data:
-            if self.request.data["encrypted"] == True:
+            if self.request.data["encrypted"] == "True":
                 curtain.encrypted = True
-                public_key: UserPublicKey | None = UserPublicKey.objects.filter(user=self.request.user).first()
-                if public_key:
-                    curtain.encrypted_with = public_key
-                    encrypted = encrypt_data(public_key.public_key, self.request.data["file"].read())
-                    curtain.file.save(str(curtain.link_id) + ".json",
-                                djangoFile(io.BytesIO(encrypted), name=str(curtain.link_id) + ".json"))
-                else:
-                    raise ValueError("No public key found")
+                if "e2e" in self.request.data:
+                    if self.request.data["e2e"] == True:
+                        return
+                # if type(self.request.user) != AnonymousUser:
+                #     public_key: UserPublicKey | None = UserPublicKey.objects.filter(user=self.request.user).first()
+                #     if public_key:
+                #         curtain.encrypted_with = public_key
+                #         encrypted = encrypt_data(public_key.public_key, self.request.data["file"].read())
+                #         curtain.file.save(str(curtain.link_id) + ".json",
+                #                           djangoFile(io.BytesIO(encrypted), name=str(curtain.link_id) + ".json"))
+                #else:
+                #    raise ValueError("No public key found")
             else:
                 curtain.encrypted = False
 
+    @action(methods=["get"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
+    def get_encryption_factors(self, request, **kwargs):
+        c: Curtain = self.get_object()
+        if c.encrypted:
+            factors = c.encryption_factors.all()[0]
+            return Response(data={"encryption_key": factors.encrypted_decryption_key, "encryption_iv": factors.encrypted_iv})
+        return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=["post"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
+    def set_encryption_factors(self, request, **kwargs):
+        c: Curtain = self.get_object()
+        if c.encrypted:
+            factors = DataAESEncryptionFactors(encrypted_iv=request.data["encryption_iv"], encrypted_decryption_key=request.data["encryption_key"], curtain=c)
+            factors.save()
+            return Response(status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_400_BAD_REQUEST)
+
     def create(self, request, **kwargs):
         c = Curtain()
+        try:
+            self.encrypt_data(c)
+        except ValueError as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
         if type(self.request.user) != AnonymousUser:
-            try:
-                self.encrypt_data(c)
-            except ValueError as e:
-                return Response(status=status.HTTP_400_BAD_REQUEST)
             c.owners.add(self.request.user)
-        c.file.save(str(c.link_id)+".json", djangoFile(self.request.data["file"]))
+        c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
         if "description" in self.request.data:
             c.description = self.request.data["description"]
 
@@ -206,10 +228,10 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
         return Response(data=curtain_json.data)
 
-    @action(methods=["post"], detail=True, permission_classes=[permissions.IsAuthenticated])
+    @action(methods=["post"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def create_encrypted(self, request, **kwargs):
         c = Curtain()
-        c.file.save(str(c.link_id)+".json", djangoFile(self.request.data["file"]))
+        c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
         if "description" in self.request.data:
             c.description = self.request.data["description"]
         if type(self.request.user) != AnonymousUser:
@@ -363,10 +385,11 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         self.request.user.extraproperties.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
 class KinaseLibraryViewSet(FiltersMixin, viewsets.ModelViewSet):
     queryset = KinaseLibraryModel.objects.all()
     serializer_class = KinaseLibrarySerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly,]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, ]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ("id", "entry")
     ordering = ("entry")
@@ -391,9 +414,9 @@ def update_section(section, data_array, model):
                     cell_type = model.objects.filter(name__exact=ct["name"]).first()
                     if cell_type:
                         section.add(cell_type)
-                #cell_type = model(**ct)
-                #cell_type.save()
-                #section.add(cell_type)
+                # cell_type = model(**ct)
+                # cell_type.save()
+                # section.add(cell_type)
         else:
             if "name" in ct:
                 cell_type = model.objects.filter(name__exact=ct["name"]).first()
@@ -403,15 +426,15 @@ def update_section(section, data_array, model):
                     cell_type = model(**ct)
                     cell_type.save()
                     section.add(cell_type)
-            #cell_type = model(**ct)
-            #cell_type.save()
-            #section.add(cell_type)
+            # cell_type = model(**ct)
+            # cell_type.save()
+            # section.add(cell_type)
 
 
 class UserPublicKeyViewSets(viewsets.ModelViewSet):
     queryset = UserPublicKey.objects.all()
     serializer_class = UserPublicKeySerializer
-    permission_classes = [permissions.IsAuthenticated,]
+    permission_classes = [permissions.IsAuthenticated, ]
     parser_classes = [MultiPartParser, JSONParser]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ("id", "created")
@@ -436,10 +459,11 @@ class UserPublicKeyViewSets(viewsets.ModelViewSet):
         user_public_key.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
 class UserAPIKeyViewSets(viewsets.ModelViewSet):
     queryset = UserAPIKey.objects.all()
     serializer_class = UserAPIKeySerializer
-    permission_classes = [permissions.IsAuthenticated,]
+    permission_classes = [permissions.IsAuthenticated, ]
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)

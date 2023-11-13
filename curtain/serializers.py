@@ -4,7 +4,8 @@ import os
 from rest_flex_fields import FlexFieldsModelSerializer
 from rest_framework import serializers
 
-from curtain.models import Curtain, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey
+from curtain.models import Curtain, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
+    DataAESEncryptionFactors, DataHash
 from curtainbe import settings
 from django.contrib.auth.models import User
 
@@ -71,3 +72,15 @@ class UserAPIKeySerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAPIKey
         fields = ["id", "name", "user", "can_read", "can_write", "can_delete"]
+
+
+class DataAESEncryptionFactorsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DataAESEncryptionFactors
+        fields = ["id", "encryption_key", "encryption_iv", "encrypted_with"]
+
+
+class DataHashSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DataHash
+        fields = ["id", "hash", "data_hash"]
