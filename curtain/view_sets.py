@@ -204,11 +204,6 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     def create(self, request, **kwargs):
         c = Curtain()
-        print(self.request.data)
-        try:
-            self.encrypt_data(c)
-        except ValueError as e:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
         if type(self.request.user) != AnonymousUser:
             c.owners.add(self.request.user)
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
@@ -224,6 +219,10 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             c.curtain_type = self.request.data["curtain_type"]
 
         c.save()
+        try:
+            self.encrypt_data(c)
+        except ValueError as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
         if type(self.request.user) != AnonymousUser:
             if settings.CURTAIN_DEFAULT_USER_LINK_LIMIT != 0:
