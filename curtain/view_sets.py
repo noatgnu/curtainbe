@@ -222,8 +222,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         c.save()
         try:
             factors = self.encrypt_data(c)
-            factors.curtain = c
-            factors.save()
+            if factors:
+                factors.curtain = c
+                factors.save()
         except ValueError as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         print(c)
