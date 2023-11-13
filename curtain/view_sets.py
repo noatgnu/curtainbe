@@ -178,8 +178,6 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 #    raise ValueError("No public key found")
             else:
                 curtain.encrypted = False
-                if curtain.encryption_factors:
-                    curtain.encryption_factors.all().delete()
             if "encryptedKey" in self.request.data and "encryptedIV" in self.request.data:
                 factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"], encrypted_decryption_key=self.request.data["encryptedKey"], curtain=curtain)
                 return factors
