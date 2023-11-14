@@ -184,8 +184,6 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 #    raise ValueError("No public key found")
             else:
                 curtain.encrypted = False
-                if curtain.encryption_factors:
-                    curtain.encryption_factors.all().delete()
 
         else:
             return
@@ -211,6 +209,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         c = Curtain()
         print(self.request.data)
         factors = self.encrypt_data(c)
+        print(factors)
         if type(self.request.user) != AnonymousUser:
             c.owners.add(self.request.user)
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
