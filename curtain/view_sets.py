@@ -165,7 +165,13 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             if self.request.data["encrypted"] == "True":
                 curtain.encrypted = True
                 if "e2e" in self.request.data:
-                    if self.request.data["e2e"] == True:
+                    if self.request.data["e2e"] == "True":
+                        if "encryptedKey" in self.request.data and "encryptedIV" in self.request.data:
+                            factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"],
+                                                               encrypted_decryption_key=self.request.data[
+                                                                   "encryptedKey"])
+                            return factors
+                    else:
                         return
                 # if type(self.request.user) != AnonymousUser:
                 #     public_key: UserPublicKey | None = UserPublicKey.objects.filter(user=self.request.user).first()
@@ -181,7 +187,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 if curtain.encryption_factors:
                     curtain.encryption_factors.all().delete()
             if "encryptedKey" in self.request.data and "encryptedIV" in self.request.data:
-                factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"], encrypted_decryption_key=self.request.data["encryptedKey"], curtain=curtain)
+                factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"], encrypted_decryption_key=self.request.data["encryptedKey"])
                 return factors
 
     @action(methods=["get"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
@@ -204,7 +210,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
     def create(self, request, **kwargs):
         c = Curtain()
         print(self.request.data)
-
+        factors = self.encrypt_data(c)
         if type(self.request.user) != AnonymousUser:
             c.owners.add(self.request.user)
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
@@ -218,16 +224,10 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 c.enable = False
         if "curtain_type" in self.request.data:
             c.curtain_type = self.request.data["curtain_type"]
-
         c.save()
-        try:
-            factors = self.encrypt_data(c)
-            if factors:
-                factors.curtain = c
-                factors.save()
-        except ValueError as e:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-        print(c)
+        if factors:
+            factors.curtain = c
+            factors.save()
 
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
         if type(self.request.user) != AnonymousUser:
@@ -320,10 +320,8 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         c = self.get_object()
-        try:
-            factors = self.encrypt_data(c)
-        except ValueError as e:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+        factors = self.encrypt_data(c)
+
         if "enable" in self.request.data:
             if self.request.data["enable"] == "True":
                 c.enable = True
@@ -339,8 +337,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             c.description = self.request.data["description"]
 
         c.save()
-        factors.curtain = c
-        factors.save()
+        if factors:
+            factors.curtain = c
+            factors.save()
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
         return Response(data=curtain_json.data)
 
