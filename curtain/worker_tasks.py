@@ -162,7 +162,7 @@ def compare_session(id_list, study_list, match_type, session_id):
                 fin_df = fin_df[0]
             else:
                 fin_df = pd.concat(fin_df, ignore_index=True)
-            cols = ["primaryID", "uniprot", "foldChange", "significant", "source_pid"]
+            cols = ["primaryID", "uniprot", "foldChange", "significant", "source_pid", "Gene Names"]
             if i in comparison_dict:
                 if len(comparison_dict[i]) > 0:
                     cols.append("comparison")
