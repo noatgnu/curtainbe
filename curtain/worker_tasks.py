@@ -130,6 +130,7 @@ def compare_session(id_list, study_list, match_type, session_id):
                 'type': 'job_message',
                 'message': message_template
             })
+            job_number += 1
         if len(uni_df) == 1:
             uni_df = uni_df[0]
         else:
