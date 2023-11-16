@@ -43,6 +43,7 @@ def compare_session(id_list, study_list, match_type, session_id):
         data = req.get(i.file.url).json()
         differential_form = data["differentialForm"]
         raw_form_map[i.link_id] = data["rawForm"]
+        print(data["settings"])
         sample_map[i.link_id] = data["settings"]["sampleMap"]
         pid_col = differential_form["_primaryIDs"]
         fc_col = differential_form["_foldChange"]
