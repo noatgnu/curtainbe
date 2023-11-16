@@ -185,6 +185,9 @@ def compare_session(id_list, study_list, match_type, session_id):
             fin_df = fin_df[cols]
             result[i]["differential"] = fin_df
 
+
+    found_list = []
+
     for i in result:
         raw = raw_df_map[i]
         raw = raw[raw[raw_form_map[i]["_primaryIDs"]].isin(result[i]["differential"]["primaryID"].tolist())]
@@ -195,9 +198,12 @@ def compare_session(id_list, study_list, match_type, session_id):
         raw = raw[raw_cols]
         raw.rename(columns={raw_form_map[i]["_primaryIDs"]: "primaryID"}, inplace=True)
         result[i]["raw"] = raw.to_dict(orient="records")
+        for s in result[i]["differential"]["source_pid"]:
+            if s not in found_list:
+                found_list.append(s)
         result[i]["differential"] = result[i]["differential"].to_dict(orient="records")
         result[i]["sampleMap"] = sample_map[i]
-
+    result["found"] = found_list
     message_template["message"] = "Operation Completed"
     message_template["data"] = result
     async_to_sync(channel_layer.group_send)(session_id, {
