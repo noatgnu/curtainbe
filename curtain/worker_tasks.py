@@ -35,6 +35,7 @@ def compare_session(id_list, study_list, match_type, session_id):
     data_store_dict = {}
     comparison_dict = {}
     for i in to_be_processed_list:
+        result[i.link_id] = {}
         message_template["message"] = "Processing " + i.link_id
         async_to_sync(channel_layer.group_send)(session_id, {
             'type': 'job_message',
@@ -46,10 +47,10 @@ def compare_session(id_list, study_list, match_type, session_id):
         if "sampleMap" in data["settings"]:
             sample_map[i.link_id] = data["settings"]["sampleMap"]
         else:
+            sample_map[i.link_id] = {}
             for k in data["settings"]["sampleOrder"]:
                 for k2 in data["settings"]["sampleOrder"][k]:
                     sample_map[i.link_id][k2] = {"condition": k, "replicate": k2, "name": k2}
-        sample_map[i.link_id] = data["settings"]["sampleMap"]
         pid_col = differential_form["_primaryIDs"]
         fc_col = differential_form["_foldChange"]
         significant_col = differential_form["_significant"]
