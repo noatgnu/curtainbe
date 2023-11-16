@@ -14,6 +14,9 @@ from curtain.models import Curtain
 def compare_session(id_list, study_list, match_type, session_id):
     to_be_processed_list = Curtain.objects.filter(link_id__in=id_list)
     result = {}
+    raw_df_map = {}
+    sample_map = {}
+    raw_form_map = {}
     uniprot_id_list = []
     study_map = {}
     channel_layer = get_channel_layer()
@@ -39,12 +42,16 @@ def compare_session(id_list, study_list, match_type, session_id):
         })
         data = req.get(i.file.url).json()
         differential_form = data["differentialForm"]
-
+        raw_form_map[i.link_id] = data["rawForm"]
+        sample_map[i.link_id] = data["settings"]["sampleMap"]
         pid_col = differential_form["_primaryIDs"]
         fc_col = differential_form["_foldChange"]
         significant_col = differential_form["_significant"]
         string_data = io.StringIO(data["processed"])
+        raw_string_data = io.StringIO(data["raw"])
         df = pd.read_csv(string_data, sep="\t")
+        raw_df = pd.read_csv(raw_string_data, sep="\t")
+        raw_df_map[i.link_id] = raw_df
         comparison_col = differential_form["_comparison"]
         comparisons = []
         if len(differential_form["_comparisonSelect"]) > 0:
@@ -79,7 +86,7 @@ def compare_session(id_list, study_list, match_type, session_id):
             else:
                 df.rename(columns={pid_col: "primaryID", fc_col: "foldChange", significant_col: "significant"},
                           inplace=True)
-            result[i.link_id] = df.to_dict(orient="records")
+            result[i.link_id]["differential"] = df
         elif match_type == "primaryID-uniprot":
             message_template["message"] = "Matching UniProt Primary ID for " + i.link_id
             async_to_sync(channel_layer.group_send)(session_id, {
@@ -101,7 +108,7 @@ def compare_session(id_list, study_list, match_type, session_id):
             else:
                 df.rename(columns={pid_col: "primaryID", "curtain_uniprot": "uniprot", fc_col: "foldChange",
                                    significant_col: "significant"}, inplace=True)
-            result[i.link_id] = df.to_dict(orient="records")
+            result[i.link_id]["differential"] = df
         elif match_type == "geneNames":
             df["curtain_uniprot"] = df[pid_col].apply(
                 lambda x: UniprotSequence(x, parse_acc=True).accession if UniprotSequence(x,parse_acc=True).accession else x)
@@ -111,6 +118,7 @@ def compare_session(id_list, study_list, match_type, session_id):
                 df.rename(columns={pid_col: "primaryID", "curtain_uniprot": "uniprot", fc_col: "foldChange", significant_col: "significant"}, inplace=True)
             data_store_dict[i.link_id] = df
             uniprot_id_list.extend(df["uniprot"].tolist())
+
 
     if match_type == "geneNames":
         unique_uniprot = set(uniprot_id_list)
@@ -168,7 +176,21 @@ def compare_session(id_list, study_list, match_type, session_id):
                 if len(comparison_dict[i]) > 0:
                     cols.append("comparison")
             fin_df = fin_df[cols]
-            result[i] = fin_df.to_dict(orient="records")
+            result[i]["differential"] = fin_df
+
+    for i in result:
+        raw = raw_df_map[i]
+        raw = raw[raw[raw_form_map[i]["_primaryIDs"]].isin(result[i]["differential"]["primaryID"].tolist())]
+        raw_cols = []
+        for s in sample_map[i]:
+            raw_cols.append(s)
+        raw_cols.append(raw_form_map[i]["_primaryIDs"])
+        raw = raw[raw_cols]
+        raw.rename(columns={raw_form_map[i]["_primaryIDs"]: "primaryID"}, inplace=True)
+        result[i]["raw"] = raw.to_dict(orient="records")
+        result[i]["differential"] = result[i]["differential"].to_dict(orient="records")
+        result[i]["sampleMap"] = sample_map[i]
+
     message_template["message"] = "Operation Completed"
     message_template["data"] = result
     async_to_sync(channel_layer.group_send)(session_id, {
