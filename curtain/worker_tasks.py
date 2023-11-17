@@ -59,8 +59,9 @@ def compare_session(id_list, study_list, match_type, session_id):
         df = pd.read_csv(string_data, sep="\t")
         if differential_form["_transformFC"]:
             df[fc_col] = df[fc_col].apply(lambda x: np.log2(x) if x >= 0 else -np.log2(-x))
-        if differential_form["_reverseFoldChange"]:
-            df[fc_col] = -df[fc_col]
+        if "_reverseFoldChange" in differential_form:
+            if differential_form["_reverseFoldChange"]:
+                df[fc_col] = -df[fc_col]
         if differential_form["_transformSignificant"]:
             df[significant_col] = -np.log10(df[significant_col])
         raw_df = pd.read_csv(raw_string_data, sep="\t")
