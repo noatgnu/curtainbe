@@ -57,12 +57,12 @@ def compare_session(id_list, study_list, match_type, session_id):
         string_data = io.StringIO(data["processed"])
         raw_string_data = io.StringIO(data["raw"])
         df = pd.read_csv(string_data, sep="\t")
-        if differential_form["_transformFC"]:
+        if differential_form["_transformFC"] == True:
             df[fc_col] = df[fc_col].apply(lambda x: np.log2(x) if x >= 0 else -np.log2(-x))
         if "_reverseFoldChange" in differential_form:
-            if differential_form["_reverseFoldChange"]:
+            if differential_form["_reverseFoldChange"]  == True:
                 df[fc_col] = -df[fc_col]
-        if differential_form["_transformSignificant"]:
+        if differential_form["_transformSignificant"]  == True:
             df[significant_col] = -np.log10(df[significant_col])
         raw_df = pd.read_csv(raw_string_data, sep="\t")
         raw_df_map[i.link_id] = raw_df
