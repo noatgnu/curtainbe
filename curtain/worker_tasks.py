@@ -30,6 +30,8 @@ def compare_session(id_list, study_list, match_type, session_id):
         for i in study_list:
             if UniprotSequence(i, parse_acc=True).accession:
                 study_map[UniprotSequence(i, parse_acc=True).accession] = i
+            else:
+                study_map[i] = i
 
         uniprot_id_list.extend(study_map.keys())
     data_store_dict = {}
