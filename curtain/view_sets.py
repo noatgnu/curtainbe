@@ -210,8 +210,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         print(self.request.data)
         factors = self.encrypt_data(c)
         print(factors)
-        if type(self.request.user) != AnonymousUser:
-            c.owners.add(self.request.user)
+
         print(self.request.user)
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
         if "description" in self.request.data:
@@ -228,7 +227,8 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         if factors is not None:
             factors.curtain = c
             factors.save()
-
+        if type(self.request.user) != AnonymousUser:
+            c.owners.add(self.request.user)
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
         if type(self.request.user) != AnonymousUser:
             if settings.CURTAIN_DEFAULT_USER_LINK_LIMIT != 0:
@@ -237,6 +237,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             else:
                 self.request.user.extraproperties.curtain_link_limit_exceed = False
             self.request.user.extraproperties.save()
+
         print(curtain_json.data)
         return Response(data=curtain_json.data)
 
