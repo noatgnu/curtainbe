@@ -212,6 +212,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         print(factors)
         if type(self.request.user) != AnonymousUser:
             c.owners.add(self.request.user)
+        print(self.request.user)
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
         if "description" in self.request.data:
             c.description = self.request.data["description"]
@@ -224,7 +225,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         if "curtain_type" in self.request.data:
             c.curtain_type = self.request.data["curtain_type"]
         c.save()
-        if factors:
+        if factors is not None:
             factors.curtain = c
             factors.save()
 
@@ -236,7 +237,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             else:
                 self.request.user.extraproperties.curtain_link_limit_exceed = False
             self.request.user.extraproperties.save()
-
+        print(curtain_json.data)
         return Response(data=curtain_json.data)
 
     @action(methods=["post"], detail=False, permission_classes=[permissions.IsAuthenticated])

@@ -105,3 +105,4 @@ class DataHash(models.Model):
         null=True
     )
     hash = models.TextField()
+
