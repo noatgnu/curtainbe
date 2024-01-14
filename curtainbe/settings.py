@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-b1h!t91!w^5#4k8k4a8%*&kk8%s#5kxc)t=d7=hwnv1cqwg0se
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
+CSRF_TRUSTED_ORIGINS = os.environ.get("CORS_ORIGIN_WHITELIST").split(",")
 
 # Application definition
 
