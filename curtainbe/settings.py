@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-b1h!t91!w^5#4k8k4a8%*&kk8%s#5kxc)t=d7=hwnv1cqwg0se
 DEBUG = True
 
 ALLOWED_HOSTS = []
-CSRF_TRUSTED_ORIGINS = os.environ.get("DJANGO_CORS_WHITELIST").split(",")
+
 
 # Application definition
 
@@ -273,6 +273,7 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
         DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 
     CORS_ORIGIN_WHITELIST = os.environ.get("DJANGO_CORS_WHITELIST").split(",")
+    CSRF_TRUSTED_ORIGINS = os.environ.get("DJANGO_CORS_WHITELIST").split(",")
     if os.environ.get("STORAGE_BACKEND") == "gcloud":
         from google.oauth2 import service_account
         STORAGES["default"]["BACKEND"] = 'storages.backends.gcloud.GoogleCloudStorage'
