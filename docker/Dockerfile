@@ -13,6 +13,7 @@ RUN mkdir "/app/backup"
 COPY . /app/
 
 RUN pip install -r requirements.txt
+RUN python manage.py collectstatic
 
 EXPOSE 8000
 CMD ["gunicorn", "curtainbe.asgi:application",  "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "--bind", "0.0.0.0:8000"]
