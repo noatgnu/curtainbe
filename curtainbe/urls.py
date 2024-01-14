@@ -22,6 +22,7 @@ from curtain.view_sets import UserViewSet, KinaseLibraryViewSet, DataFilterListV
     UserAPIKeyViewSets, UserPublicKeyViewSets
 from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHView, KinaseLibraryProxyView, \
     DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView
+from django.contrib import admin
 
 #from curtain.contrib import admin
 #from curtain.urls import path
@@ -49,5 +50,5 @@ urlpatterns = [
     path('compare-session/', CompareSessionView.as_view(), name='compare_session'),
     path('stats/summary/<int:last_n_days>/', StatsView.as_view(), name="stats_summary"),
     path(r'job/<str:job_id>/', JobResultView.as_view(), name='job_result'),
-    #path('admin/', admin.site.urls),
+    path('admin/', admin.site.urls),
 ]
