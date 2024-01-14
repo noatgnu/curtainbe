@@ -55,6 +55,12 @@ class Curtain(models.Model):
     )
     encrypted = models.BooleanField(default=False)
 
+    def __str__(self):
+        return f"{self.link_id} - {self.curtain_type} - Created: {self.created}"
+
+    def __repr__(self):
+        return f"{self.link_id} - {self.curtain_type} - Created: {self.created}"
+
 class SocialPlatform(models.Model):
     name = models.TextField()
 
@@ -65,6 +71,12 @@ class DataFilterList(models.Model):
     data = models.TextField()
     default = models.BooleanField(default=False)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="users", blank=True, null=True)
+
+    def __repr__(self):
+        return f"{self.name} - {self.category} - {self.user}"
+
+    def __str__(self):
+        return f"{self.name} - {self.category} - {self.user}"
 
 
 class KinaseLibraryModel(models.Model):
