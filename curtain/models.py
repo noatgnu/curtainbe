@@ -56,10 +56,16 @@ class Curtain(models.Model):
     encrypted = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"{self.link_id} - {self.curtain_type} - Created: {self.created}"
+        owners = "None"
+        if self.owners:
+            owners = ",".join([i.username for i in self.owners.all()])
+        return f"{self.link_id} - {self.curtain_type} - Created: {self.created} - owners: {owners}"
 
     def __repr__(self):
-        return f"{self.link_id} - {self.curtain_type} - Created: {self.created}"
+        owners = "None"
+        if self.owners:
+            owners = ",".join([i.username for i in self.owners.all()])
+        return f"{self.link_id} - {self.curtain_type} - Created: {self.created} - owners: {owners}"
 
 class SocialPlatform(models.Model):
     name = models.TextField()
