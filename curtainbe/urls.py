@@ -33,6 +33,9 @@ router.register(r'data_filter_list', DataFilterListViewSet)
 router.register(r'curtain', CurtainViewSet)
 #router.register(r'userapikey', UserAPIKeyViewSets)
 #router.register(r'userpublickey', UserPublicKeyViewSets)
+admin.site.site_header = "CURTAIN Admin"
+admin.site.site_title = "CURTAIN Admin Portal"
+admin.site.index_title = "Welcome to CURTAIN data sharing and exploration admin portal"
 
 urlpatterns = [
     path('', include(router.urls)),
