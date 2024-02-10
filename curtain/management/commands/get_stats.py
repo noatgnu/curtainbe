@@ -21,11 +21,11 @@ class Command(BaseCommand):
             file_path = options['file_path']
             stats_data = Request.objects.filter(path__regex="\/curtain\/[a-z0-9\-]+\/download\/\w*")
             if stats_type == "daily":
-                download_stats = (stats_data.annotate(date=TruncDay('time')).values('date').annotate(downloads=Count("response")))
+                download_stats = (stats_data.annotate(date=TruncDay('time')).values('date').annotate(downloads=Count(data_type)))
             elif stats_type == "weekly":
-                download_stats = (stats_data.annotate(date=TruncWeek('time')).values('date').annotate(downloads=Count("response")))
+                download_stats = (stats_data.annotate(date=TruncWeek('time')).values('date').annotate(downloads=Count(data_type)))
             elif stats_type == "monthly":
-                download_stats = (stats_data.annotate(date=TruncMonth('time')).values('date').annotate(downloads=Count("response")))
+                download_stats = (stats_data.annotate(date=TruncMonth('time')).values('date').annotate(downloads=Count(data_type)))
 
             else:
                 raise CommandError("Invalid stats type")
