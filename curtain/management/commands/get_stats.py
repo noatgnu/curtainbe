@@ -4,6 +4,9 @@ from django.db.models import Count
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth
 from request.models import Request
 
+from curtain.models import Curtain
+
+
 class Command(BaseCommand):
     """
     A command that get download stats from Request table and save it to a file
@@ -19,7 +22,10 @@ class Command(BaseCommand):
         data_type = options['data_type']
         if stats_type in ("daily", "weekly", "monthly") and data_type in ("response", "id"):
             file_path = options['file_path']
-            stats_data = Request.objects.filter(path__regex="\/curtain\/[a-z0-9\-]+\/download\/\w*")
+            if data_type == "response":
+                stats_data = Request.objects.filter(path__regex="\/curtain\/[a-z0-9\-]+\/download\/\w*")
+            else:
+                stats_data = Curtain.objects.all()
             if stats_type == "daily":
                 download_stats = (stats_data.annotate(date=TruncDay('time')).values('date').annotate(downloads=Count(data_type)))
             elif stats_type == "weekly":
