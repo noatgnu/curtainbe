@@ -11,11 +11,13 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('stats_type', type=str, help='Type of stats to be processed')
+        parser.add_argument('data_type', type=str, help='Type of data to be processed', default="response")
         parser.add_argument('file_path', type=str, help='Path to the file to be saved')
 
     def handle(self, *args, **options):
         stats_type = options['stats_type']
-        if stats_type in ("daily", "weekly", "monthly"):
+        data_type = options['data_type']
+        if stats_type in ("daily", "weekly", "monthly") and data_type in ("response", "id"):
             file_path = options['file_path']
             stats_data = Request.objects.filter(path__regex="\/curtain\/[a-z0-9\-]+\/download\/\w*")
             if stats_type == "daily":
