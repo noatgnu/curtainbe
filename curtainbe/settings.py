@@ -197,6 +197,12 @@ REQUEST_IGNORE_PATHS = [
     "/admin",
     "/static",
     r'^stats/download/',
+    "/token",
+    "/api-auth",
+    "/logout",
+    "/user",
+
+
 ]
 
 # Staff settings
@@ -310,7 +316,8 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
     DBBACKUP_CONNECTORS = {
         'default': {
             'dump_cmd': 'pg_dump --no-owner --no-acl --no-privileges',
-            'restore_cmd': 'pg_restore --no-owner --no-acl --no-privileges',
+            'restore_cmd': 'pg_restore --no-owner --no-acl --no-privileges --disable-triggers',
+            'RESTORE_SUFFIX': '--if-exists'
         }
     }
 
