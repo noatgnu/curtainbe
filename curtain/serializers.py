@@ -71,7 +71,7 @@ class UserAPIKeySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserAPIKey
-        fields = ["id", "name", "user", "can_read", "can_write", "can_delete"]
+        fields = ["id", "name", "can_read", "can_create", "can_delete", "can_update"]
 
 
 class DataAESEncryptionFactorsSerializer(serializers.ModelSerializer):
