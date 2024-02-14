@@ -21,7 +21,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from curtain.view_sets import UserViewSet, KinaseLibraryViewSet, DataFilterListViewSet, CurtainViewSet, \
     UserAPIKeyViewSets, UserPublicKeyViewSets
 from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHView, KinaseLibraryProxyView, \
-    DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView
+    DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView, \
+    APIKeyView
 from django.contrib import admin
 
 #from curtain.contrib import admin
@@ -31,6 +32,7 @@ router.register(r'users', UserViewSet)
 router.register(r'kinase_library', KinaseLibraryViewSet)
 router.register(r'data_filter_list', DataFilterListViewSet)
 router.register(r'curtain', CurtainViewSet)
+router.register(r'api_key', APIKeyView)
 #router.register(r'userapikey', UserAPIKeyViewSets)
 #router.register(r'userpublickey', UserPublicKeyViewSets)
 admin.site.site_header = "CURTAIN Admin"
