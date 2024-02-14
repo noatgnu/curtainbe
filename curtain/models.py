@@ -2,8 +2,10 @@ import uuid
 
 from django.db import models
 from django.contrib.auth.models import User
+from rest_framework_api_key.crypto import KeyGenerator
+
 from curtainbe import settings
-from rest_framework_api_key.models import AbstractAPIKey
+from rest_framework_api_key.models import AbstractAPIKey, BaseAPIKeyManager
 
 
 class ExtraProperties(models.Model):
@@ -19,7 +21,12 @@ class ExtraProperties(models.Model):
                                            related_name="user_default_public_key")
 
 
+class UserAPIKeyManager(BaseAPIKeyManager):
+    key_generator = KeyGenerator(prefix_length=16, secret_key_length=128)
+
 class UserAPIKey(AbstractAPIKey):
+    objects = UserAPIKeyManager()
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_keys")
     can_read = models.BooleanField(default=True)
     can_create = models.BooleanField(default=False)

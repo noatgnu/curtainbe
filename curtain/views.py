@@ -294,9 +294,7 @@ class APIKeyView(APIView):
 
     def post(self, request):
         key_name = self.request.data["name"]
-        user_api_key, key = UserAPIKey.objects.create_key(name=key_name)
-        user_api_key.user = self.request.user
-        user_api_key.save()
+        user_api_key, key = UserAPIKey.objects.create_key(name=key_name, user=self.request.user)
         return Response(data={"key": key})
 
     def delete(self, request):
