@@ -15,4 +15,4 @@ class APIKeyAuthentication(authentication.BaseAuthentication):
             user = api_key.user
         except User.DoesNotExist:
             return None
-        return user
+        return (user, None)
