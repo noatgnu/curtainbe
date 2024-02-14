@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rq.job import Job
 from scipy.stats import ttest_ind
 
-from curtain.models import User, ExtraProperties, SocialPlatform, Curtain
+from curtain.models import User, ExtraProperties, SocialPlatform, Curtain, UserAPIKey
 from curtainbe import settings
 import requests
 from request.models import Request
@@ -288,3 +288,23 @@ class JobResultView(APIView):
                 return Response(data={"status": "unknown"})
         else:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+class APIKeyView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        key_name = self.request.data["name"]
+        user_api_key, key = UserAPIKey.objects.create_key(name=key_name)
+        user_api_key.user = self.request.user
+        user_api_key.save()
+        return Response(data={"key": key})
+
+    def delete(self, request):
+        key_name = self.request.data["name"]
+        keys = self.request.user.api_keys.all()
+        keys.filter(name=key_name).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def get(self, request):
+        keys = self.request.user.api_keys.all()
+        return Response(data={"keys": [{"name": key.name} for key in keys]})

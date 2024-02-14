@@ -1,8 +1,9 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework_api_key.permissions import BaseHasAPIKey
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 
-from curtain.models import CurtainAccessToken
+from curtain.models import CurtainAccessToken, UserAPIKey
 from curtainbe import settings
 
 
@@ -70,4 +71,29 @@ class IsDataFilterListOwner(BasePermission):
     def has_object_permission(self, request, view, obj):
         if bool(request.user and request.user.is_authenticated):
             return bool(request.user == obj.user)
+        return False
+
+class HasUserAPIKey(BaseHasAPIKey):
+    model = UserAPIKey
+
+    def has_permission(self, request, view):
+        assert self.model is not None
+        key = self.get_key(request)
+        if key is None:
+            return False
+        return self.model.objects.is_valid(key)
+
+    def has_object_permission(self, request, view, obj):
+        assert self.model is not None
+        key = self.get_key(request)
+        if key is None:
+            return False
+        api_key = self.model.objects.get_from_key(key)
+        user = api_key.user
+        # check if object is DataFilterList
+        if hasattr(obj, "user"):
+            return bool(user == obj.user)
+        # check if object is Curtain
+        if hasattr(obj, "owners"):
+            return bool(user in obj.owners.all())
         return False
