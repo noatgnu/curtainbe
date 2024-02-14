@@ -196,13 +196,8 @@ CORS_ALLOW_HEADERS = [
 REQUEST_IGNORE_PATHS = [
     "/admin",
     "/static",
-    r'^stats/download/',
-    "/token",
-    "/api-auth",
     "/logout",
-    "/user",
-
-
+    r'^stats/download/',
 ]
 
 # Staff settings

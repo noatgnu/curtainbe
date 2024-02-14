@@ -24,6 +24,7 @@ class Command(BaseCommand):
             file_path = options['file_path']
             ti = "time"
             if data_type == "response":
+
                 stats_data = Request.objects.filter(path__regex="\/curtain\/[a-z0-9\-]+\/download\/\w*")
             else:
                 stats_data = Curtain.objects.all()
