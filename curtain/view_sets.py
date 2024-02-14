@@ -33,7 +33,7 @@ import io
 from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
     DataAESEncryptionFactors
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
-    IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner
+    IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
     UserPublicKeySerializer, UserAPIKeySerializer
 from curtain.utils import is_user_staff, delete_file_related_objects, calculate_boxplot_parameters, \
