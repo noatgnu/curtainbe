@@ -489,8 +489,10 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
 
     def get_object(self):
         queryset = self.get_queryset()
-        filter_id = self.request.query_params.get("id", None)
-        return queryset.get(id=filter_id)
+        filter_id = self.kwargs[self.lookup_field]
+        data_object = queryset.get(id=filter_id)
+        self.check_object_permissions(self.request, data_object)
+        return data_object
 
     def create(self, request, *args, **kwargs):
         api_key, key = UserAPIKey.objects.create_key(name=self.request.data["name"], user=self.request.user)
