@@ -22,7 +22,7 @@ class ExtraProperties(models.Model):
 
 
 class UserAPIKeyManager(BaseAPIKeyManager):
-    key_generator = KeyGenerator(prefix_length=16, secret_key_length=128)
+    key_generator = KeyGenerator(prefix_length=8, secret_key_length=128)
 
 class UserAPIKey(AbstractAPIKey):
     objects = UserAPIKeyManager()
