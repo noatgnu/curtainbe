@@ -487,6 +487,11 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
 
+    def get_object(self):
+        queryset = self.get_queryset()
+        filter_id = self.request.query_params.get("id", None)
+        return queryset.get(id=filter_id)
+
     def create(self, request, *args, **kwargs):
         api_key, key = UserAPIKey.objects.create_key(name=self.request.data["name"], user=self.request.user)
         return Response(data={"key": key}, status=status.HTTP_201_CREATED)
