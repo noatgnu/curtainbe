@@ -482,6 +482,7 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
     queryset = UserAPIKey.objects.all()
     serializer_class = UserAPIKeySerializer
     permission_classes = [permissions.IsAuthenticated, ]
+    lookup_field = "id"
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
