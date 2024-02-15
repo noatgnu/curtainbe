@@ -489,7 +489,9 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
 
     def get_object(self):
         queryset = self.get_queryset()
+        print(self.kwargs)
         filter_id = self.kwargs[self.lookup_field]
+        print(filter_id)
         data_object = queryset.get(id=filter_id)
         self.check_object_permissions(self.request, data_object)
         return data_object
