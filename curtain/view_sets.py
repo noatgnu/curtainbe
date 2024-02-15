@@ -492,5 +492,7 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         api_key = self.get_object()
+        if api_key.user != self.request.user:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
         api_key.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
