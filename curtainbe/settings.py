@@ -163,13 +163,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
-# Django Channels
-ASGI_APPLICATION = 'curtainbe.asgi.application'
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer"
-    }
-}
+
 
 # Django CORS Headers
 CORS_ORIGIN_ALLOW_ALL = False
@@ -232,6 +226,10 @@ REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (
             "rest_framework.renderers.JSONRenderer",
         )
+
+# Django Channels
+ASGI_APPLICATION = 'curtainbe.asgi.application'
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
