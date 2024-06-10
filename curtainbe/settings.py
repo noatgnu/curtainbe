@@ -268,6 +268,15 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
             'PORT': int(os.environ.get('POSTGRES_PORT', '5432')),
         },
     }
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+                "symmetric_encryption_keys": [SECRET_KEY]
+            },
+        },
+    }
 
     if os.environ.get("POSTGRES_SSL", "0") == "1":
         DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
