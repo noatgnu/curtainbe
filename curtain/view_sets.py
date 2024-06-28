@@ -220,6 +220,11 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 c.enable = False
         if "curtain_type" in self.request.data:
             c.curtain_type = self.request.data["curtain_type"]
+        if "permanent" in self.request.data:
+            if self.request.data["permanent"] == "True":
+                c.permanent = True
+            else:
+                c.permanent = False
         c.save()
         if factors is not None:
             factors.curtain = c
