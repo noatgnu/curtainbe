@@ -31,7 +31,7 @@ from django.db import transaction
 import io
 
 from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
-    DataAESEncryptionFactors
+    DataAESEncryptionFactors, LastAccess
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
     IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
@@ -148,6 +148,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         #     "Vary": "Origin",
         # }
         # logging.info(c.file.url)
+        LastAccess.objects.create(curtain=c)
         return Response(data={"url": c.file.url}, status=status.HTTP_200_OK)
 
     @action(methods=["post"], detail=True, permission_classes=[permissions.IsAdminUser | IsCurtainOwner])
@@ -207,11 +208,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     def create(self, request, **kwargs):
         c = Curtain()
-        print(self.request.data)
         factors = self.encrypt_data(c)
-        print(factors)
-
-        print(self.request.user)
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
         if "description" in self.request.data:
             c.description = self.request.data["description"]

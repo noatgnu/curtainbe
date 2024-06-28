@@ -9,6 +9,10 @@ from rest_framework_api_key.models import AbstractAPIKey, BaseAPIKeyManager
 
 
 class ExtraProperties(models.Model):
+    """
+    This model represents additional properties for a user. It includes fields for curtain link limits,
+    social platform, curtain link limit exceed flag, curtain post flag, and a default public key.
+    """
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     curtain_link_limits = models.IntegerField(default=settings.CURTAIN_DEFAULT_USER_LINK_LIMIT)
     social_platform = models.ForeignKey("SocialPlatform", on_delete=models.SET_NULL,
@@ -22,9 +26,13 @@ class ExtraProperties(models.Model):
 
 
 class UserAPIKeyManager(BaseAPIKeyManager):
+
     key_generator = KeyGenerator(prefix_length=8, secret_key_length=128)
 
 class UserAPIKey(AbstractAPIKey):
+    """
+    This model represents an API key for a user. It includes fields for read, create, delete, and update permissions.
+    """
     objects = UserAPIKeyManager()
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_keys")
@@ -36,12 +44,19 @@ class UserAPIKey(AbstractAPIKey):
 
 
 class UserPublicKey(models.Model):
+    """
+    This model represents a public key for a user.
+    """
     created = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="public_keys")
     public_key = models.BinaryField()
 
 
 class Curtain(models.Model):
+    """
+    This model represents a Curtain, which includes fields for creation and update timestamps, a unique link ID,
+    a file, a description, owners, enable flag, curtain type, and an encrypted flag.
+    """
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     link_id = models.TextField(unique=True, default=uuid.uuid4, null=False)
@@ -60,6 +75,7 @@ class Curtain(models.Model):
         choices=curtain_type_choices,
         default="TP"
     )
+    permanent = models.BooleanField(default=True)
     encrypted = models.BooleanField(default=False)
 
     def __str__(self):
@@ -75,10 +91,16 @@ class Curtain(models.Model):
         return f"{self.link_id} - {self.curtain_type} - Created: {self.created} - owners: {owners}"
 
 class SocialPlatform(models.Model):
+    """
+    This model represents a social platform with a name field.
+    """
     name = models.TextField()
 
 
 class DataFilterList(models.Model):
+    """
+    This model represents a data filter list, which includes fields for name, category, data, default flag, and a user.
+    """
     name = models.TextField()
     category = models.TextField()
     data = models.TextField()
@@ -93,6 +115,9 @@ class DataFilterList(models.Model):
 
 
 class KinaseLibraryModel(models.Model):
+    """
+    This model represents a kinase library model, which includes fields for entry, position, residue, and data.
+    """
     entry = models.TextField()
     position = models.IntegerField()
     residue = models.CharField(
@@ -102,6 +127,9 @@ class KinaseLibraryModel(models.Model):
 
 
 class CurtainAccessToken(models.Model):
+    """
+    This model represents an access token for a Curtain.
+    """
     created = models.DateTimeField(auto_now_add=True)
     curtain = models.ForeignKey(
         "Curtain", on_delete=models.CASCADE, related_name="access_token",
@@ -112,6 +140,10 @@ class CurtainAccessToken(models.Model):
 
 
 class DataAESEncryptionFactors(models.Model):
+    """
+    This model represents AES encryption factors for a Curtain, which includes fields for an encrypted decryption key,
+    an encrypted IV, and a reference to the public key used for encryption.
+    """
     created = models.DateTimeField(auto_now_add=True)
     curtain = models.ForeignKey(
         "Curtain", on_delete=models.CASCADE, related_name="encryption_factors",
@@ -123,6 +155,9 @@ class DataAESEncryptionFactors(models.Model):
     encrypted_with = models.ForeignKey("UserPublicKey", on_delete=models.SET_NULL, blank=True, null=True, related_name="encrypted_with")
 
 class DataHash(models.Model):
+    """
+    This model represents a data hash for a Curtain.
+    """
     created = models.DateTimeField(auto_now_add=True)
     curtain = models.ForeignKey(
         "Curtain", on_delete=models.CASCADE, related_name="data_hash",
@@ -130,4 +165,11 @@ class DataHash(models.Model):
         null=True
     )
     hash = models.TextField()
+
+class LastAccess(models.Model):
+    """
+    This model represents the last access timestamp for a Curtain.
+    """
+    curtain = models.ForeignKey(Curtain, on_delete=models.CASCADE, related_name="last_access")
+    last_access = models.DateTimeField(auto_now=True)
 
