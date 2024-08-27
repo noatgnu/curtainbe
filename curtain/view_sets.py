@@ -138,11 +138,11 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         # if Curtain object is not permanent, check if LastAccess is older then 3 months, if so, filter it out
         query = Q()
         query.add(Q(permanent=True), Q.OR)
-        query.add(Q(lastaccess__created__gte=(timezone.now() - timedelta(days=90)), lastaccess__isnull=False), Q.OR)
+        query.add(Q(last_access__created__gte=(timezone.now() - timedelta(days=90)), last_access__isnull=False), Q.OR)
         self.queryset = self.queryset.annotate(
-            lastaccess_count=Count("lastaccess", filter=query)
+            last_access_count=Count("last_access", filter=query)
         )
-        self.queryset = self.queryset.filter(Q(lastaccess_count__gt=0))
+        self.queryset = self.queryset.filter(Q(last_access_count__gt=0))
 
         return self.queryset
 
