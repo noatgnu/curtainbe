@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from django.core.files.base import File as djangoFile
 from django.contrib.auth.models import User, AnonymousUser
-from django.db.models import Q, Count
+from django.db.models import Q, Count, OuterRef, Subquery
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page, never_cache
@@ -135,14 +135,20 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
     filter_validation_schema = curtain_query_schema
 
     def get_queryset(self):
-        # if Curtain object is not permanent, check if LastAccess is older then 3 months, if so, filter it out
-        query = Q()
-        query.add(Q(permanent=True), Q.OR)
-        query.add(Q(last_access__created__gte=(timezone.now() - timedelta(days=90)), last_access__isnull=False), Q.OR)
+        # Define a subquery to get the latest LastAccess for each Curtain
+        latest_last_access_subquery = LastAccess.objects.filter(
+            curtain=OuterRef('pk')
+        ).order_by('-last_access').values('last_access')[:1]
+
+        # Annotate the Curtain queryset with the latest last_access date
         self.queryset = self.queryset.annotate(
-            last_access_count=Count("last_access", filter=query)
+            latest_last_access=Subquery(latest_last_access_subquery)
         )
-        self.queryset = self.queryset.filter(Q(last_access_count__gt=0))
+
+        # Filter the Curtain queryset based on the annotated last_access date
+        ninety_days_ago = timezone.now() - timedelta(days=90)
+        query = Q(permanent=True) | Q(latest_last_access__gte=ninety_days_ago)
+        self.queryset = self.queryset.filter(query)
 
         return self.queryset
 
