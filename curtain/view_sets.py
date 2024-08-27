@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from django.core.files.base import File as djangoFile
 from django.contrib.auth.models import User, AnonymousUser
 from django.db.models import Q, Count
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page, never_cache
 # from django_sendfile import sendfile
@@ -132,6 +133,21 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         "curtain_type": "curtain_type__in"
     }
     filter_validation_schema = curtain_query_schema
+
+    def get_queryset(self):
+        # if Curtain object is not permanent, check if LastAccess is older then 3 months, if so, filter it out
+        query = Q()
+        query.add(Q(permanent=True), Q.OR)
+        query.add(Q(lastaccess__created__gte=(timezone.now() - timedelta(days=90)), lastaccess__isnull=False), Q.OR)
+        self.queryset = self.queryset.annotate(
+            lastaccess_count=Count("lastaccess", filter=query)
+        )
+        self.queryset = self.queryset.filter(Q(lastaccess_count__gt=0))
+
+        return self.queryset
+
+    def get_object(self):
+        return super().get_object()
 
     @action(methods=["get"], url_path="download/?token=(?P<token>[^/]*)", detail=True, permission_classes=[
         permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic

@@ -209,11 +209,12 @@ def compare_session(id_list, study_list, match_type, session_id):
         raw_cols.append(raw_form_map[i]["_primaryIDs"])
         raw = raw[raw_cols]
         raw.rename(columns={raw_form_map[i]["_primaryIDs"]: "primaryID"}, inplace=True)
-        result[i]["raw"] = raw.to_dict(orient="records")
+        result[i]["raw"] = raw.replace({np.nan: None}).to_dict(orient="records")
         for s in result[i]["differential"]["source_pid"]:
             if s not in found_list:
                 found_list.append(s)
-        result[i]["differential"] = result[i]["differential"].to_dict(orient="records")
+
+        result[i]["differential"] = result[i]["differential"].replace({np.nan: None}).to_dict(orient="records")
         result[i]["sampleMap"] = sample_map[i]
     result["found"] = found_list
     message_template["message"] = "Operation Completed"
