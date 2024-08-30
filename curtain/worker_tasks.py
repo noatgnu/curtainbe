@@ -194,13 +194,15 @@ def compare_session(id_list, study_list, match_type, session_id):
                 else:
                     fin_df = pd.concat(fin_df, ignore_index=True)
             if not fin_df.empty:
-                
+
                 cols = ["primaryID", "uniprot", "foldChange", "significant", "source_pid", "Gene Names"]
                 if i in comparison_dict:
                     if len(comparison_dict[i]) > 0:
                         cols.append("comparison")
                 fin_df = fin_df[cols]
                 result[i]["differential"] = fin_df
+            else:
+                result[i]["differential"] = pd.DataFrame(columns=["primaryID", "uniprot", "foldChange", "significant", "source_pid", "Gene Names"])
 
 
     found_list = []
