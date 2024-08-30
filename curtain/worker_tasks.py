@@ -141,6 +141,7 @@ def compare_session(id_list, study_list, match_type, session_id):
 
     if match_type == "geneNames":
         unique_uniprot = set(uniprot_id_list)
+
         parser = UniprotParser(columns="accession,id,gene_names")
         uni_df = []
         message_template["message"] = "Retrieving UniProt data"
@@ -163,6 +164,7 @@ def compare_session(id_list, study_list, match_type, session_id):
         else:
             uni_df = pd.concat(uni_df, ignore_index=True)
         studied_uni_df = uni_df[uni_df["From"].isin(set(study_map.keys()))]
+        print(studied_uni_df)
         # studied_uni_df["gene_names_split"] = studied_uni_df["Gene Names"].str.split(" ")
         # studied_uni_df = studied_uni_df.explode("gene_names_split")
         for i in data_store_dict:
@@ -203,7 +205,7 @@ def compare_session(id_list, study_list, match_type, session_id):
                 result[i]["differential"] = fin_df
             else:
                 result[i]["differential"] = pd.DataFrame(columns=["primaryID", "uniprot", "foldChange", "significant", "source_pid", "Gene Names"])
-
+    print(result)
 
     found_list = []
 
