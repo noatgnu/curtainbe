@@ -145,9 +145,11 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             latest_last_access=Subquery(latest_last_access_subquery)
         )
 
-        # Filter the Curtain queryset based on the annotated last_access date
+        # Get the date 90 days ago
         ninety_days_ago = timezone.now() - timedelta(days=90)
-        query = Q(permanent=True) | Q(latest_last_access__gte=ninety_days_ago)
+
+        # Filter the Curtain queryset based on the conditions
+        query = Q(permanent=True) | Q(latest_last_access__isnull=True) | Q(latest_last_access__gte=ninety_days_ago)
         self.queryset = self.queryset.filter(query)
 
         return self.queryset
