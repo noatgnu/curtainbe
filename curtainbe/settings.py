@@ -51,7 +51,6 @@ INSTALLED_APPS = [
     'request',
     'django_rq',
     'django_extensions'
-
 ]
 
 MIDDLEWARE = [
