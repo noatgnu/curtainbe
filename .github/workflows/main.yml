@@ -24,6 +24,7 @@ jobs:
         echo "REDIS_PASSWORD=test_redis_password" >> .env
         echo "REDIS_PORT=6379" >> .env
         echo "REDIS_DB=0" >> .env
+        echo "DJANGO_CORS_WHITELIST=http://localhost:8000" >> .env
 
     - name: Build and start containers
       run: docker-compose -f docker-compose.public.yml up -d
