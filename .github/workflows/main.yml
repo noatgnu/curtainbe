@@ -32,14 +32,14 @@ jobs:
       run: sleep 30
 
     - name: Apply migrations
-      run: docker-compose -f docker-compose.public.yml exec web python manage.py migrate
+      run: docker-compose -f docker-compose.public.yml exec -T web python manage.py migrate
 
     - name: Create superuser
       run: |
         echo "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('admin', 'admin@example.com', 'password')" | docker-compose -f docker-compose.public.yml exec -T web python manage.py shell
 
     - name: Run tests
-      run: docker-compose -f docker-compose.public.yml exec web python manage.py test
+      run: docker-compose -f docker-compose.public.yml exec -T web python manage.py test
 
     - name: Tear down
       run: docker-compose -f docker-compose.public.yml down
