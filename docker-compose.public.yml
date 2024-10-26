@@ -1,0 +1,61 @@
+version: "3.8"
+services:
+  web:
+    container_name: curtainweb
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - WORKING_ENV=PRODUCTION
+      - POSTGRES_NAME=${POSTGRES_NAME}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=db
+      - SECRET_KEY=${SECRET_KEY}
+      - DJANGO_CORS_WHITELIST=${DJANGO_CORS_WHITELIST}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
+      - ORCID_OAUTH_CLIENT_ID=${ORCID_OAUTH_CLIENT_ID}
+      - ORCID_OAUTH_SECRET=${ORCID_OAUTH_SECRET}
+      - CURTAIN_ALLOW_NON_STAFF_DELETE=${CURTAIN_ALLOW_NON_STAFF_DELETE}
+      - CURTAIN_ALLOW_NON_USER_POST=${CURTAIN_ALLOW_NON_USER_POST}
+      - CURTAIN_DEFAULT_USER_LINK_LIMIT=${CURTAIN_DEFAULT_USER_LINK_LIMIT}
+      - CURTAIN_DEFAULT_USER_CAN_POST=${CURTAIN_DEFAULT_USER_CAN_POST}
+      - STORAGE_BACKEND=${STORAGE_BACKEND}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME}
+      - AWS_S3_ENDPOINT_URL=${AWS_S3_ENDPOINT_URL}
+      - REDIS_HOST=redis
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+    depends_on:
+      - redis
+    networks:
+      - celsus-net
+  redis:
+    image: redis:latest
+    container_name: curtainredis
+    environment:
+      - PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    networks:
+      - celsus-net
+  db:
+    container_name: curtaindb
+    image: postgres:14.5
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    networks:
+      - celsus-net
+
+networks:
+  celsus-net:

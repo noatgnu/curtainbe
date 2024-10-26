@@ -1,0 +1,75 @@
+---
+- name: Setup Curtain Backend with Docker Compose and Let's Encrypt
+  hosts: all
+  become: true
+
+  vars:
+    domain_name: "yourdomain.com"
+    email: "youremail@example.com"
+
+  tasks:
+    - name: Update and upgrade apt packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+          - python3-pip
+          - certbot
+          - python3-certbot-dns-cloudflare
+        state: present
+
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Clone the repository
+      git:
+        repo: 'https://github.com/noatgnu/curtainbe.git'
+        dest: /opt/curtainbe
+
+    - name: Copy docker-compose.public.yml
+      copy:
+        src: /opt/curtainbe/docker-compose.public.yml
+        dest: /opt/curtainbe/docker-compose.yml
+
+    - name: Build and start Docker containers
+      command: docker-compose up -d
+      args:
+        chdir: /opt/curtainbe
+
+    - name: Obtain Let's Encrypt certificate
+      command: certbot certonly --standalone --preferred-challenges http --agree-tos --email {{ email }} -d {{ domain_name }}
+      register: certbot_result
+      ignore_errors: yes
+
+    - name: Create a cron job for auto-renewal
+      cron:
+        name: "Auto-renew Let's Encrypt certificate"
+        job: "0 0,12 * * * certbot renew --quiet --renew-hook 'docker-compose restart web'"
+        user: root
+        state: present
+
+    - name: Copy SSL certificates to Docker container
+      copy:
+        src: /etc/letsencrypt/live/{{ domain_name }}/fullchain.pem
+        dest: /opt/curtainbe/certs/fullchain.pem
+      notify: restart docker
+
+    - name: Copy SSL key to Docker container
+      copy:
+        src: /etc/letsencrypt/live/{{ domain_name }}/privkey.pem
+        dest: /opt/curtainbe/certs/privkey.pem
+      notify: restart docker
+
+  handlers:
+    - name: restart docker
+      command: docker-compose restart
+      args:
+        chdir: /opt/curtainbe

@@ -1,106 +1,76 @@
 # Curtain Backend
 
-## Description
-Curtain Backend is the backend service for Curtain project which aims to provide a platform for data sharing and exploration of differential analysis data from Total proteomics and PTM proteomics analysis.
+This project is the backend for Curtain. It includes models for managing curtains, user public keys, social platforms, data filter lists, kinase library models, curtain access tokens, AES encryption factors, data hashes, and last access timestamps.
 
-## Development Requirements
-- Python 3.10 or higher
-- Poetry for dependency management
+## Setup
 
-### Main Dependencies
-```shell
-python = ">3.9,<3.13"
-django = "^4.2.7"
-djangorestframework = "^3.14.0"
-django-filter = "^23.3"
-djangorestframework-simplejwt = "^5.3.0"
-drf-url-filters = "^0.5.1"
-django-cors-headers = "^4.3.0"
-pandas = "^2.1.2"
-uniprotparser = "^1.1.0"
-drf-flex-fields = "^1.0.2"
-psycopg2 = "^2.9.9"
-gunicorn = "^21.2.0"
-dj-rest-auth = "^5.0.1"
-django-dbbackup = "^4.0.2"
-django-rest-auth = "^0.9.5"
-django-request = "^1.6.3"
-statsmodels = "^0.14.0"
-channels = "^4.0.0"
-uvicorn = {extras = ["standard"], version = "^0.24.0.post1"}
-channels-redis = {extras = ["cryptography"], version = "^4.1.0"}
-boto3 = "^1.28.82"
-django-rq = "^2.8.1"
-djangorestframework-api-key = "^3.0.0"
-google-cloud-storage = "^2.13.0"
-django-storages = {extras = ["s3"], version = "^1.14.2"} # For S3 storage backend,modify the extras to other storage backends as required
-urllib3 = ">=1.25.4,<1.27"
-django-extensions = "^3.2.3"
-whitenoise = "^6.6.0"
-```
+You can set up and run this project using Docker Compose directly or the provided Ansible playbook.
 
+### Using Docker Compose
 
-## Development Installation (manual)
-
-1. Clone the repository:
+1. **Clone the repository**:
     ```sh
     git clone https://github.com/noatgnu/curtainbe.git
     cd curtainbe
     ```
 
-2. Install dependencies using Poetry:
-    ```sh
-    poetry install
-    ```
-   
-3. Activate the virtual environment:
-    ```sh
-    poetry shell
-    ```
-   
-4. Apply database migrations:
-    ```sh
-    python manage.py migrate
-    ```
-   
-5. Run the development server:
-    ```sh
-    python manage.py runserver
-    ```
-   
-## Setup with Docker
+2. **Create environment variables file**:
+    Create a `.env` file in the project root and add the necessary environment variables.
 
-1. **Clone the repository:**
+3. **Build and start Docker containers**:
+    ```sh
+    docker-compose up -d
+    ```
+
+4. **Apply migrations**:
+    ```sh
+    docker-compose exec web python manage.py migrate
+    ```
+
+5. **Create a superuser**:
+    ```sh
+    docker-compose exec web python manage.py createsuperuser
+    ```
+
+6. **Access the application**:
+    Open your browser and go to `http://localhost:8000`.
+
+### Using Ansible Playbook
+
+1. **Clone the repository**:
     ```sh
     git clone https://github.com/noatgnu/curtainbe.git
     cd curtainbe
     ```
-   
-2. **Build the Docker image:**
-    ```sh
-    docker compose build
-    ```
 
-3. **Start the containers:**
+2. **Create environment variables file**:
+    Create a `.env` file in the project root and add the necessary environment variables.
+
+3. **Run the Ansible playbook**:
     ```sh
-    docker compose up
+    ansible-playbook -i inventory ansible.playbook.yml -e "domain_name=yourdomain.com email=youremail@example.com"
     ```
-   
-4. **Apply database migrations:**
+4. **Access the application**:
+    Open your browser and go to `https://yourdomain.com`.
+
+
+## Contributing
+
+1. **Fork the repository**.
+2. **Create a new branch**:
     ```sh
-    docker compose exec web python manage.py migrate
+    git checkout -b feature/your-feature-name
     ```
-   
-5. **Create a superuser:**
+3. **Commit your changes**:
     ```sh
-    docker compose exec -it web python manage.py createsuperuser
+    git commit -m 'Add some feature'
     ```
-   
-6. **Access the development server:**
+4. **Push to the branch**:
     ```sh
-    http://localhost:8000
+    git push origin feature/your-feature-name
     ```
-   
+5. **Open a pull request**.
+
 ## License
+
 This project is licensed under the MIT License.
-```
