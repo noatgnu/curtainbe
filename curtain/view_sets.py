@@ -571,5 +571,5 @@ class DataCiteViewSets(viewsets.ModelViewSet):
             data = response.json()
             result = [i for i in data["dois"] if i.startswith(settings.DATACITE_PREFIX)]
             if len(result) > 0:
-                return Response(data={"suffix": result[0].replace(settings.DATACITE_PREFIX+"/", "")})
+                return Response(data={"suffix": result[0].replace(settings.DATACITE_PREFIX+"/", ""), "prefix": settings.DATACITE_PREFIX})
         return Response(status=status.HTTP_400_BAD_REQUEST)
