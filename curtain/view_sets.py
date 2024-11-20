@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from django.core.files.base import File as djangoFile
 from django.contrib.auth.models import User, AnonymousUser
+from django.core.signing import TimestampSigner
 from django.db.models import Q, Count, OuterRef, Subquery
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -548,6 +549,15 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         return self.queryset.filter(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
+        if "token" not in self.request.data:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        signer = TimestampSigner()
+        try:
+            suffix = signer.unsign(self.request.data["token"], max_age=timedelta(minutes=30))
+
+        except ValueError as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
         data_cite = DataCite(user=self.request.user, data_cite=self.request.data["data_cite"])
         data_cite.save()
         return Response(status=status.HTTP_201_CREATED)
@@ -573,3 +583,12 @@ class DataCiteViewSets(viewsets.ModelViewSet):
             if len(result) > 0:
                 return Response(data={"suffix": result[0].replace(settings.DATACITE_PREFIX+"/", ""), "prefix": settings.DATACITE_PREFIX})
         return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
+    def get_time_limited_permission_token(self, request, *args, **kwargs):
+        suffix = self.request.query_params.get("suffix", None)
+        if suffix is None:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        signer = TimestampSigner()
+        token = signer.sign(suffix)
+        return Response(data={"token": token})
