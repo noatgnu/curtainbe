@@ -253,6 +253,11 @@ RQ_QUEUES = {
     },
 }
 
+DATACITE_USERNAME = os.environ.get("DATACITE_USERNAME")
+DATACITE_PASSWORD = os.environ.get("DATACITE_PASSWORD")
+DATACITE_PREFIX = os.environ.get("DATACITE_PREFIX")
+DATACITE_API_URL = os.environ.get("DATACITE_API_URL")
+
 if os.environ.get("WORKING_ENV") == "PRODUCTION":
     DEBUG = os.environ.get("DEBUG", "False") == "True"
     SECRET_KEY = os.environ.get("SECRET_KEY")

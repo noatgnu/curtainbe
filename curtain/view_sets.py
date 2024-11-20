@@ -5,6 +5,7 @@ import os
 import uuid
 from datetime import timedelta
 
+import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -32,11 +33,11 @@ from django.db import transaction
 import io
 
 from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
-    DataAESEncryptionFactors, LastAccess
+    DataAESEncryptionFactors, LastAccess, DataCite
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
     IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
-    UserPublicKeySerializer, UserAPIKeySerializer
+    UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer
 from curtain.utils import is_user_staff, delete_file_related_objects, calculate_boxplot_parameters, \
     check_nan_return_none, get_uniprot_data, encrypt_data
 from curtain.validations import curtain_query_schema, kinase_library_query_schema, data_filter_list_query_schema
@@ -533,3 +534,42 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
             return Response(status=status.HTTP_401_UNAUTHORIZED)
         api_key.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class DataCiteViewSets(viewsets.ModelViewSet):
+    queryset = DataCite.objects.all()
+    serializer_class = DataCiteSerializer
+    permission_classes = [permissions.AllowAny, ]
+    parser_classes = [MultiPartParser, JSONParser]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ("id", "created")
+    ordering = ("created", "id")
+
+    def get_queryset(self):
+        return self.queryset.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        data_cite = DataCite(user=self.request.user, data_cite=self.request.data["data_cite"])
+        data_cite.save()
+        return Response(status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        data_cite = self.get_object()
+        data_cite.data_cite = self.request.data["data_cite"]
+        data_cite.save()
+        return Response(status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        data_cite = self.get_object()
+        data_cite.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
+    def get_random_suffix(self, request, *args, **kwargs):
+        datacite_url = f"{settings.DATACITE_API_URL}/dois/random?prefix={settings.DATACITE_PREFIX}"
+        response = requests.get(datacite_url)
+        if response.status_code == 200:
+            data = response.json()
+            result = [i for i in data["dois"] if i.starswith(settings.DATACITE_PREFIX)]
+            if len(result) > 0:
+                return Response(data={"suffix": result[0].replace(settings.DATACITE_PREFIX+"/", "")})
+        return Response(status=status.HTTP_400_BAD_REQUEST)

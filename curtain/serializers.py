@@ -5,7 +5,7 @@ from rest_flex_fields import FlexFieldsModelSerializer
 from rest_framework import serializers
 
 from curtain.models import Curtain, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
-    DataAESEncryptionFactors, DataHash, LastAccess
+    DataAESEncryptionFactors, DataHash, LastAccess, DataCite
 from curtainbe import settings
 from django.contrib.auth.models import User
 
@@ -77,15 +77,20 @@ class UserAPIKeySerializer(serializers.ModelSerializer):
 class DataAESEncryptionFactorsSerializer(serializers.ModelSerializer):
     class Meta:
         model = DataAESEncryptionFactors
-        fields = ["id", "encryption_key", "encryption_iv", "encrypted_with"]
+        fields = ["id", "encrypted_decryption_key", "encrypted_iv", "encrypted_with"]
 
 
 class DataHashSerializer(serializers.ModelSerializer):
     class Meta:
         model = DataHash
-        fields = ["id", "hash", "data_hash"]
+        fields = ["id", "hash", "hash"]
 
 class LastAccessSerializer(serializers.ModelSerializer):
     class Meta:
         model = LastAccess
         fields = ["id", "last_access", "curtain"]
+
+class DataCiteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DataCite
+        fields = ["id", "updated", "created", "curtain", "doi", "status", "user", "title"]

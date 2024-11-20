@@ -166,6 +166,23 @@ class DataHash(models.Model):
     )
     hash = models.TextField()
 
+class DataCite(models.Model):
+    """
+    This model represents a data citation for a Curtain.
+    """
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+    curtain = models.ForeignKey(
+        "Curtain", on_delete=models.CASCADE, related_name="data_cite",
+        blank=True,
+        null=True
+    )
+    status = models.TextField(blank=True, null=True)
+    doi = models.TextField(blank=True, null=True)
+    title = models.TextField(blank=True, null=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="data_cite", blank=True, null=True)
+
+
 class LastAccess(models.Model):
     """
     This model represents the last access timestamp for a Curtain.
