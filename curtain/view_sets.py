@@ -592,3 +592,15 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         signer = TimestampSigner()
         token = signer.sign(suffix)
         return Response(data={"token": token})
+
+    @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
+    def proxy_orcid(self, request, *args, **kwargs):
+        orcid = self.request.query_params.get("orcid", None)
+        if orcid is None:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        orcid_url = f"https://orcid.org/{orcid}/public-record.json"
+        data = requests.get(orcid_url)
+        if data.status_code == 200:
+            return Response(data=data.json())
+        else:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
