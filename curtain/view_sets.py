@@ -37,6 +37,7 @@ from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, Data
     DataAESEncryptionFactors, LastAccess, DataCite
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
     IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey
+from curtain.pydantic_models import DataCiteForm
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
     UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer
 from curtain.utils import is_user_staff, delete_file_related_objects, calculate_boxplot_parameters, \
@@ -539,7 +540,7 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
 class DataCiteViewSets(viewsets.ModelViewSet):
     queryset = DataCite.objects.all()
     serializer_class = DataCiteSerializer
-    permission_classes = [permissions.AllowAny, ]
+    permission_classes = [permissions.IsAuthenticated, ]
     parser_classes = [MultiPartParser, JSONParser]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ("id", "created")
@@ -554,6 +555,10 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         signer = TimestampSigner()
         try:
             suffix = signer.unsign(self.request.data["token"], max_age=timedelta(minutes=30))
+            form_data = self.request.data["form"]
+            # validate form data using pydantic
+            data = DataCiteForm(**form_data)
+            
 
         except ValueError as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -573,7 +578,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         data_cite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
+    @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_random_suffix(self, request, *args, **kwargs):
         datacite_url = f"{settings.DATACITE_API_URL}/dois/random?prefix={settings.DATACITE_PREFIX}"
         response = requests.get(datacite_url)
@@ -584,7 +589,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                 return Response(data={"suffix": result[0].replace(settings.DATACITE_PREFIX+"/", ""), "prefix": settings.DATACITE_PREFIX})
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
-    @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
+    @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_time_limited_permission_token(self, request, *args, **kwargs):
         suffix = self.request.query_params.get("suffix", None)
         if suffix is None:
@@ -593,7 +598,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         token = signer.sign(suffix)
         return Response(data={"token": token})
 
-    @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
+    @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def proxy_orcid(self, request, *args, **kwargs):
         orcid = self.request.query_params.get("orcid", None)
         if orcid is None:
