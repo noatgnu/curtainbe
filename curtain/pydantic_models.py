@@ -75,7 +75,7 @@ class DataCiteForm(BaseModel):
     suffix: str
     url: HttpUrl
     creators: List[Creator]
-    title: List[Title]
+    titles: List[Title]
     publisher: str
     publisherIdentifier: HttpUrl
     publicationYear: int

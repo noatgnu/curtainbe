@@ -9,6 +9,7 @@ import requests
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
+from datacite import schema45, DataCiteRESTClient
 from django.core.files.base import File as djangoFile
 from django.contrib.auth.models import User, AnonymousUser
 from django.core.signing import TimestampSigner
@@ -550,22 +551,37 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         return self.queryset.filter(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if "token" not in self.request.data:
+        if "token" not in self.request.data or "form" not in self.request.data or "linkID" not in self.request.data:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         signer = TimestampSigner()
         try:
             suffix = signer.unsign(self.request.data["token"], max_age=timedelta(minutes=30))
             form_data = self.request.data["form"]
             # validate form data using pydantic
-            data = DataCiteForm(**form_data)
-            
-
+            try:
+                schema45.validate(data=form_data)
+            except ValueError as e:
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+            link_id = self.request.data["linkID"]
+            #check if poster is owner of the curtain link id
+            curtain = Curtain.objects.filter(link_id=link_id)
+            if curtain.exists():
+                curtain = curtain.first()
+                if self.request.user.is_authenticated:
+                    if curtain.owners.filter(id=self.request.user.id).exists() or self.request.user.is_staff:
+                        client = DataCiteRESTClient(
+                            username=settings.DATACITE_USERNAME,
+                            password=settings.DATACITE_PASSWORD,
+                            prefix=settings.DATACITE_PREFIX,
+                            test_mode=settings.DATACITE_TEST_MODE
+                        )
+                        doi = client.public_doi(doi=f"{settings.DATACITE_PREFIX}/{suffix}", metadata=form_data, url=form_data["url"])
+                        data_cite = DataCite(user=self.request.user, curtain=curtain, title=form_data["titles"][0]["title"], status="published", doi=doi)
+                        data_cite.save()
+                        return Response({"doi": doi},status=status.HTTP_201_CREATED)
+            return Response(status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
-
-        data_cite = DataCite(user=self.request.user, data_cite=self.request.data["data_cite"])
-        data_cite.save()
-        return Response(status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         data_cite = self.get_object()

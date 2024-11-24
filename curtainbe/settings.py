@@ -257,6 +257,9 @@ DATACITE_USERNAME = os.environ.get("DATACITE_USERNAME")
 DATACITE_PASSWORD = os.environ.get("DATACITE_PASSWORD")
 DATACITE_PREFIX = os.environ.get("DATACITE_PREFIX")
 DATACITE_API_URL = os.environ.get("DATACITE_API_URL")
+DATACITE_TEST_MODE = True
+if os.environ.get("DATACITE_TEST_MODE") == "False":
+    DATACITE_TEST_MODE = False
 
 if os.environ.get("WORKING_ENV") == "PRODUCTION":
     DEBUG = os.environ.get("DEBUG", "False") == "True"
