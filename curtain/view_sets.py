@@ -556,6 +556,8 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         signer = TimestampSigner()
         try:
             suffix = signer.unsign(self.request.data["token"], max_age=timedelta(minutes=30))
+
+
             form_data = self.request.data["form"]
             # validate form data using pydantic
             try:
@@ -568,6 +570,10 @@ class DataCiteViewSets(viewsets.ModelViewSet):
             if curtain.exists():
                 curtain = curtain.first()
                 if self.request.user.is_authenticated:
+                    # check if user has submitted more than the number of max datacite per user per day
+                    user_datacite_count_today = DataCite.objects.filter(user=self.request.user, created__date=timezone.now().date()).count()
+                    if user_datacite_count_today >= settings.DATACITE_MAX_DOI_PER_DAY_PER_USER:
+                        return Response(status=status.HTTP_400_BAD_REQUEST)
                     if curtain.owners.filter(id=self.request.user.id).exists() or self.request.user.is_staff:
                         client = DataCiteRESTClient(
                             username=settings.DATACITE_USERNAME,
@@ -575,7 +581,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                             prefix=settings.DATACITE_PREFIX,
                             test_mode=settings.DATACITE_TEST_MODE
                         )
-                        doi = client.public_doi(doi=f"{settings.DATACITE_PREFIX}/{suffix}", metadata=form_data, url=form_data["url"])
+                        doi = client.public_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}", metadata=form_data, url=form_data["url"])
                         data_cite = DataCite(user=self.request.user, curtain=curtain, title=form_data["titles"][0]["title"], status="published", doi=doi)
                         data_cite.save()
                         return Response({"doi": doi},status=status.HTTP_201_CREATED)
