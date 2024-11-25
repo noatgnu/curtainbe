@@ -631,3 +631,8 @@ class DataCiteViewSets(viewsets.ModelViewSet):
             return Response(data=data.json())
         else:
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
+    def get_quota(self, request, *args, **kwargs):
+        user_datacite_count_today = DataCite.objects.filter(user=self.request.user, created__date=timezone.now().date()).count()
+        return Response(data={"quota": settings.DATACITE_MAX_DOI_PER_DAY_PER_USER - user_datacite_count_today, "max_quota": settings.DATACITE_MAX_DOI_PER_DAY_PER_USER})
