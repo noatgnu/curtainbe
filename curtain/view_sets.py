@@ -551,7 +551,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         return self.queryset.filter(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if "token" not in self.request.data or "form" not in self.request.data or "linkID" not in self.request.data:
+        if "contact_email" not in self.request.data or "pii_statement" not in self.request.data or "token" not in self.request.data or "form" not in self.request.data or "linkID" not in self.request.data:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         signer = TimestampSigner()
         try:
