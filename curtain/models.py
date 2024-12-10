@@ -181,7 +181,9 @@ class DataCite(models.Model):
     doi = models.TextField(blank=True, null=True)
     title = models.TextField(blank=True, null=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="data_cite", blank=True, null=True)
-
+    form_data = models.JSONField(blank=True, null=True)
+    contact_email = models.EmailField(blank=True, null=True)
+    pii_statement = models.TextField(blank=True, null=True)
 
 class LastAccess(models.Model):
     """

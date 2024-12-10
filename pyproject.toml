@@ -36,6 +36,7 @@ django-extensions = "^3.2.3"
 whitenoise = "^6.6.0"
 datacite = "^1.2.0"
 pydantic = "^2.10.1"
+django-ses = {extras = ["events"], version = "^4.3.0"}
 
 
 [build-system]

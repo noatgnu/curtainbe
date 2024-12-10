@@ -581,8 +581,8 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                             prefix=settings.DATACITE_PREFIX,
                             test_mode=settings.DATACITE_TEST_MODE
                         )
-                        doi = client.public_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}", metadata=form_data, url=form_data["url"])
-                        data_cite = DataCite(user=self.request.user, curtain=curtain, title=form_data["titles"][0]["title"], status="published", doi=doi)
+                        doi = client.draft_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}", metadata=form_data, url=form_data["url"])
+                        data_cite = DataCite(user=self.request.user, curtain=curtain, title=form_data["titles"][0]["title"], status="draft", doi=doi, form_data=form_data, contact_email=self.request.data["contact_email"], pii_statement=self.request.data["pii_statement"])
                         data_cite.save()
                         return Response({"doi": doi},status=status.HTTP_201_CREATED)
             return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -591,9 +591,28 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         data_cite = self.get_object()
-        data_cite.data_cite = self.request.data["data_cite"]
+        if not request.user.is_staff:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        form_data = self.request.data["form"]
+        # validate form data using pydantic
+        try:
+            schema45.validate(data=form_data)
+        except ValueError as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        data_cite.form_data = form_data
+        if request.data["status"] == "published":
+            if data_cite.status == "draft":
+                client = DataCiteRESTClient(
+                    username=settings.DATACITE_USERNAME,
+                    password=settings.DATACITE_PASSWORD,
+                    prefix=settings.DATACITE_PREFIX,
+                    test_mode=settings.DATACITE_TEST_MODE
+                )
+                client.show_doi(data_cite.doi)
+                data_cite.save()
+                return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
         data_cite.save()
-        return Response(status=status.HTTP_200_OK)
+        return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         data_cite = self.get_object()

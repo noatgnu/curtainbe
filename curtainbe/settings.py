@@ -262,7 +262,17 @@ DATACITE_MAX_DOI_PER_DAY_PER_USER = int(os.environ.get("DATACITE_MAX_DOI_PER_DAY
 if os.environ.get("DATACITE_TEST_MODE") == "False":
     DATACITE_TEST_MODE = False
 
+
+
+
+
 if os.environ.get("WORKING_ENV") == "PRODUCTION":
+    EMAIL_BACKEND = 'django_ses.SESBackend'
+    AWS_SES_ACCESS_KEY_ID = os.environ.get("AWS_SES_ACCESS_KEY_ID", "")
+    AWS_SES_SECRET_ACCESS_KEY = os.environ.get("AWS_SES_SECRET_ACCESS_KEY", "")
+    AWS_SES_REGION_NAME = os.environ.get('AWS_SES_REGION_NAME', "us-east-1")
+
+    AWS_SES_REGION_ENDPOINT = os.environ.get('AWS_SES_REGION_ENDPOINT', 'email.us-east-1.amazonaws.com')
     DEBUG = os.environ.get("DEBUG", "False") == "True"
     SECRET_KEY = os.environ.get("SECRET_KEY")
     ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "http://localhost,http://127.0.0.1").split(",")

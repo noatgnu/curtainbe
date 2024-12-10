@@ -93,4 +93,4 @@ class LastAccessSerializer(serializers.ModelSerializer):
 class DataCiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = DataCite
-        fields = ["id", "updated", "created", "curtain", "doi", "status", "user", "title"]
+        fields = ["id", "updated", "created", "curtain", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement"]
