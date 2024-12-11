@@ -581,9 +581,14 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                             prefix=settings.DATACITE_PREFIX,
                             test_mode=settings.DATACITE_TEST_MODE
                         )
-                        doi = client.draft_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}", metadata=form_data, url=form_data["url"])
-                        data_cite = DataCite(user=self.request.user, curtain=curtain, title=form_data["titles"][0]["title"], status="draft", doi=doi, form_data=form_data, contact_email=self.request.data["contact_email"], pii_statement=self.request.data["pii_statement"])
+                        data_cite = DataCite(user=self.request.user, curtain=curtain, title=form_data["titles"][0]["title"], form_data=form_data, contact_email=self.request.data["contact_email"], pii_statement=self.request.data["pii_statement"])
                         data_cite.save()
+                        doi = client.draft_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}",
+                                               metadata=form_data, url=form_data["url"])
+                        data_cite.doi = doi
+                        data_cite.status = "draft"
+                        data_cite.save()
+
                         return Response({"doi": doi},status=status.HTTP_201_CREATED)
             return Response(status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
