@@ -31,6 +31,11 @@ class DataCiteAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def review_datacite(self, request, datacite_id):
+        context = dict(
+            self.admin_site.each_context(request),
+            title='Review DataCite',
+            datacite_id=datacite_id,
+        )
         datacite = self.get_object(request, datacite_id)
         if request.method == 'POST':
             form = DataCiteForm(request.POST, instance=datacite)
@@ -49,7 +54,10 @@ class DataCiteAdmin(admin.ModelAdmin):
                 return redirect('admin:curtain_datacite_changelist')
         else:
             form = DataCiteForm(instance=datacite)
-        return render(request, 'admin/review_datacite.html', {'form': form, 'datacite': datacite, 'form_data': datacite.form_data})
+        context['form'] = form
+        context['datacite'] = datacite
+        context['form_data'] = datacite.form_data
+        return render(request, 'admin/review_datacite.html', context)
 
     def approve_datacite(self, request, queryset):
         for datacite in queryset:
