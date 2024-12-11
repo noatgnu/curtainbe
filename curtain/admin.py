@@ -20,7 +20,7 @@ class DataFilterListAdmin(admin.ModelAdmin):
     pass
 
 class DataCiteAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'status', 'created')
+    list_display = ('id', 'title', 'user', 'status', 'created')
     actions = ['approve_datacite']
 
     def get_urls(self):
