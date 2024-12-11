@@ -1,5 +1,6 @@
 import uuid
 
+from django.core.mail import send_mail
 from django.db import models
 from django.contrib.auth.models import User
 from rest_framework_api_key.crypto import KeyGenerator
@@ -187,10 +188,19 @@ class DataCite(models.Model):
     contact_email = models.EmailField(blank=True, null=True)
     pii_statement = models.TextField(blank=True, null=True)
     curtain = models.ForeignKey(
-        "Curtain", on_delete=models.CASCADE, related_name="data_cite",
+        "Curtain", on_delete=models.SET_NULL, related_name="data_cite",
         blank=True,
         null=True
     )
+
+    def send_notification(self):
+        send_mail(
+            'Curtain Data Cite Notification',
+            f'Your data cite request has been processed and the status of {self.doi} is now {self.status}.',
+            settings.NOTIFICATION_EMAIL_FROM,
+            [self.contact_email],
+            fail_silently=False,
+        )
 
 class LastAccess(models.Model):
     """

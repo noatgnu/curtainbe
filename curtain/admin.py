@@ -104,8 +104,17 @@ class DataCiteAdmin(admin.ModelAdmin):
 
     def approve_datacite(self, request, queryset):
         for datacite in queryset:
+            client = DataCiteRESTClient(
+                username=settings.DATACITE_USERNAME,
+                password=settings.DATACITE_PASSWORD,
+                prefix=settings.DATACITE_PREFIX,
+                test_mode=settings.DATACITE_TEST_MODE
+            )
+            client.show_doi(datacite.doi)
             datacite.status = 'published'
             datacite.save()
+
+            datacite.send_notification()
         self.message_user(request, "Selected DataCite(s) approved successfully.")
     approve_datacite.short_description = "Approve selected DataCite(s)"
 
