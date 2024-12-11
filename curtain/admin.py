@@ -116,6 +116,8 @@ class DataCiteAdmin(admin.ModelAdmin):
 
             datacite.send_notification()
         self.message_user(request, "Selected DataCite(s) approved successfully.")
+
+
     approve_datacite.short_description = "Approve selected DataCite(s)"
 
 admin.site.register(DataCite, DataCiteAdmin)
