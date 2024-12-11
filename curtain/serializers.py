@@ -35,14 +35,22 @@ class UserSerializer(FlexFieldsModelSerializer):
 
 class CurtainSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
+    data_cite = serializers.SerializerMethodField()
 
     def get_file(self, record):
         _, filename = os.path.split(record.file.name)
         return filename
 
+    def get_data_cite(self, record):
+        data_cite = DataCite.objects.filter(curtain=record)
+        if data_cite.exists():
+            return DataCiteSerializer(data_cite.first()).data
+        else:
+            return None
+
     class Meta:
         model = Curtain
-        fields = ["id", "created", "link_id", "file", "enable", "description", "curtain_type", "encrypted", "permanent"]
+        fields = ["id", "created", "link_id", "file", "enable", "description", "curtain_type", "encrypted", "permanent", "data_cite"]
         lookup_field = "link_id"
 
 
