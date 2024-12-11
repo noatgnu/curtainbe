@@ -100,8 +100,6 @@ class DataCiteForm(ModelForm):
     class Meta:
         model = DataCite
         fields = [
-            'schemaVersion', 'prefix', 'suffix', 'url', 'creators', 'titles', 'publisher',
-            'publicationYear', 'types', 'subjects', 'contributors', 'descriptions',
-            'rightsList', 'alternateIdentifiers', 'relatedIdentifiers', 'fundingReferences',
-            'form_data', 'status'
+            'schemaVersion', 'prefix', 'suffix', 'url', 'publisher',
+            'publicationYear', 'types', 'form_data', 'status'
         ]
