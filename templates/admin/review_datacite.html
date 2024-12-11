@@ -1,6 +1,14 @@
 {% extends "admin/base_site.html" %}
 {% load static %}
 
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; <a href="{% url 'admin:curtain_datacite_changelist' %}">DataCite</a>
+  &rsaquo; Review DataCite
+</div>
+{% endblock %}
+
 {% block content %}
   <h1>Review DataCite</h1>
   <form method="post">{% csrf_token %}
