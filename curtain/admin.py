@@ -5,6 +5,8 @@ from django.utils.html import format_html
 from django.urls import path
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
+
+from .datacite_form import DataCiteForm
 from .models import DataCite
 from django.conf import settings
 from curtain.models import Curtain, DataFilterList, DataCite
@@ -37,6 +39,8 @@ class DataCiteAdmin(admin.ModelAdmin):
             datacite_id=datacite_id,
         )
         datacite = self.get_object(request, datacite_id)
+        form_data = datacite.form_data
+
         if request.method == 'POST':
             form = DataCiteForm(request.POST, instance=datacite)
             if form.is_valid():
@@ -53,10 +57,46 @@ class DataCiteAdmin(admin.ModelAdmin):
                 self.message_user(request, "DataCite status updated successfully.")
                 return redirect('admin:curtain_datacite_changelist')
         else:
-            form = DataCiteForm(instance=datacite)
+            initial_data = {
+                'schemaVersion': form_data.get('schemaVersion', ''),
+                'prefix': form_data.get('prefix', ''),
+                'suffix': form_data.get('suffix', ''),
+                'url': form_data.get('url', ''),
+                'creators': [{'name': creator.get('name', ''), 'nameType': creator.get('nameType', 'Personal')} for
+                             creator in form_data.get('creators', [])],
+                'titles': [{'title': title.get('title', ''), 'lang': title.get('lang', 'en')} for title in
+                           form_data.get('titles', [])],
+                'publisher': form_data.get('publisher', {}),
+                'publicationYear': form_data.get('publicationYear', ''),
+                'types': form_data.get('types', {}),
+                'subjects': [{'subject': subject.get('subject', ''), 'subjectScheme': subject.get('subjectScheme', ''),
+                              'valueUri': subject.get('valueUri', '')} for subject in form_data.get('subjects', [])],
+                'contributors': [
+                    {'name': contributor.get('name', ''), 'nameType': contributor.get('nameType', 'Personal')} for
+                    contributor in form_data.get('contributors', [])],
+                'descriptions': [{'description': description.get('description', ''),
+                                  'descriptionType': description.get('descriptionType', 'Abstract')} for description in
+                                 form_data.get('descriptions', [])],
+                'rightsList': [{'rights': rights.get('rights', ''), 'rightsUri': rights.get('rightsUri', '')} for rights
+                               in form_data.get('rightsList', [])],
+                'alternateIdentifiers': [{'alternateIdentifier': alt_id.get('alternateIdentifier', ''),
+                                          'alternateIdentifierType': alt_id.get('alternateIdentifierType', '')} for
+                                         alt_id in form_data.get('alternateIdentifiers', [])],
+                'relatedIdentifiers': [{'relatedIdentifier': rel_id.get('relatedIdentifier', ''),
+                                        'relatedIdentifierType': rel_id.get('relatedIdentifierType', ''),
+                                        'relationType': rel_id.get('relationType', '')} for rel_id in
+                                       form_data.get('relatedIdentifiers', [])],
+                'fundingReferences': [
+                    {'funderName': fund.get('funderName', ''), 'funderIdentifier': fund.get('funderIdentifier', ''),
+                     'funderIdentifierType': fund.get('funderIdentifierType', ''),
+                     'awardNumber': fund.get('awardNumber', ''), 'awardUri': fund.get('awardUri', ''),
+                     'awardTitle': fund.get('awardTitle', '')} for fund in form_data.get('fundingReferences', [])],
+            }
+            form = DataCiteForm(instance=datacite, initial=initial_data)
+
         context['form'] = form
         context['datacite'] = datacite
-        context['form_data'] = datacite.form_data
+        context['form_data'] = form_data
         return render(request, 'admin/review_datacite.html', context)
 
     def approve_datacite(self, request, queryset):
@@ -68,7 +108,3 @@ class DataCiteAdmin(admin.ModelAdmin):
 
 admin.site.register(DataCite, DataCiteAdmin)
 
-class DataCiteForm(forms.ModelForm):
-    class Meta:
-        model = DataCite
-        fields = ['form_data', 'status']
