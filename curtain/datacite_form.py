@@ -4,43 +4,22 @@ from django import forms
 from django.forms import ModelForm, formset_factory
 from .models import DataCite
 
-class NameIdentifierForm(forms.Form):
-    schemeUri = forms.URLField(initial="https://orcid.org/")
-    nameIdentifier = forms.CharField(required=False)
-    nameIdentifierScheme = forms.CharField(initial="ORCID")
-
-class AffiliationForm(forms.Form):
-    name = forms.CharField(required=True)
-    affiliationIdentifier = forms.CharField(required=False)
-    affiliationIdentifierScheme = forms.CharField(required=False)
-    schemeUri = forms.URLField(required=False)
-
 class CreatorForm(forms.Form):
     givenName = forms.CharField(required=False)
     familyName = forms.CharField(required=False)
-    name = forms.CharField(required=True)
-    nameType = forms.CharField(initial="Personal")
+    name = forms.CharField(required=False)
+    nameType = forms.CharField(initial="Personal", required=False)
     nameIdentifiers = forms.CharField(widget=forms.HiddenInput(), required=False)
     affiliation = forms.CharField(widget=forms.HiddenInput(), required=False)
 
 class TitleForm(forms.Form):
-    title = forms.CharField(required=True)
-    lang = forms.CharField(initial="en")
-
-class PublisherForm(forms.Form):
-    name = forms.CharField(initial="University of Dundee")
-    publisherIdentifier = forms.URLField(initial="https://ror.org/03h2bxq36")
-    publisherIdentifierScheme = forms.CharField(initial="ROR")
-    schemeUri = forms.URLField(initial="https://ror.org/")
-
-class TypeForm(forms.Form):
-    resourceTypeGeneral = forms.CharField(initial="Dataset")
-    resourceType = forms.CharField(initial="Interactive visualization of differential analysis datasets")
+    title = forms.CharField(required=False)
+    lang = forms.CharField(initial="en", required=False)
 
 class SubjectForm(forms.Form):
-    subject = forms.CharField(initial="Biological sciences")
-    subjectScheme = forms.CharField(initial="OECD REVISED FIELD OF SCIENCE AND TECHNOLOGY (FOS) CLASSIFICATION IN THE FRASCATI MANUAL")
-    valueUri = forms.URLField(initial="https://unstats.un.org/wiki/download/attachments/101354089/FOS.pdf?api=v2")
+    subject = forms.CharField(initial="Biological sciences", required=False)
+    subjectScheme = forms.CharField(initial="OECD REVISED FIELD OF SCIENCE AND TECHNOLOGY (FOS) CLASSIFICATION IN THE FRASCATI MANUAL", required=False)
+    valueUri = forms.URLField(initial="https://unstats.un.org/wiki/download/attachments/101354089/FOS.pdf?api=v2", required=False)
 
 class ContributorForm(forms.Form):
     name = forms.CharField(required=False)
@@ -48,19 +27,19 @@ class ContributorForm(forms.Form):
     givenName = forms.CharField(required=False)
     familyName = forms.CharField(required=False)
     nameIdentifiers = forms.CharField(widget=forms.HiddenInput(), required=False)
-    nameType = forms.CharField(initial="Personal")
+    nameType = forms.CharField(initial="Personal", required=False)
 
 class DescriptionForm(forms.Form):
-    description = forms.CharField(widget=forms.Textarea, required=True)
-    descriptionType = forms.CharField(initial="Abstract")
+    description = forms.CharField(widget=forms.Textarea, required=False)
+    descriptionType = forms.CharField(initial="Abstract", required=False)
 
 class RightsForm(forms.Form):
-    rights = forms.CharField(initial="Creative Commons Attribution 4.0 International")
-    rightsUri = forms.URLField(initial="https://creativecommons.org/licenses/by/4.0/legalcode")
+    rights = forms.CharField(initial="Creative Commons Attribution 4.0 International", required=False)
+    rightsUri = forms.URLField(initial="https://creativecommons.org/licenses/by/4.0/legalcode", required=False)
 
 class AlternateIdentifierForm(forms.Form):
-    alternateIdentifier = forms.CharField(required=True)
-    alternateIdentifierType = forms.CharField(initial="Direct data access URL")
+    alternateIdentifier = forms.CharField(required=False)
+    alternateIdentifierType = forms.CharField(initial="Direct data access URL", required=False)
 
 class RelatedIdentifierForm(forms.Form):
     relatedIdentifier = forms.CharField(required=False)
