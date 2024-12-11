@@ -95,7 +95,7 @@ class DataCiteAdmin(admin.ModelAdmin):
         context['descriptions_formset'] = descriptions_formset
         context['rightsList_formset'] = rightsList_formset
         context['alternateIdentifiers_formset'] = alternateIdentifiers_formset
-        context['related_identifiers_formset'] = related_identifiers_formset
+        context['relatedIdentifiers_formset'] = related_identifiers_formset
         context['fundingReferences_formset'] = fundingReferences_formset
         context['datacite'] = datacite
 
