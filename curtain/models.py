@@ -186,6 +186,11 @@ class DataCite(models.Model):
     form_data = models.JSONField(blank=True, null=True)
     contact_email = models.EmailField(blank=True, null=True)
     pii_statement = models.TextField(blank=True, null=True)
+    curtain = models.ForeignKey(
+        "Curtain", on_delete=models.CASCADE, related_name="data_cite",
+        blank=True,
+        null=True
+    )
 
 class LastAccess(models.Model):
     """
