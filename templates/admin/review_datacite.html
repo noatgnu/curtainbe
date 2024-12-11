@@ -5,5 +5,47 @@
     {{ form.as_p }}
     <button type="submit" class="button">Save</button>
   </form>
+  <h2>Form Data</h2>
+  <form>
+    <div>
+      <label for="schemaVersion">Schema Version</label>
+      <input type="text" id="schemaVersion" name="schemaVersion" value="{{ form_data.schemaVersion }}" required>
+    </div>
+    <div>
+      <label for="prefix">Prefix</label>
+      <input type="text" id="prefix" name="prefix" value="{{ form_data.prefix }}" required>
+    </div>
+    <div>
+      <label for="suffix">Suffix</label>
+      <input type="text" id="suffix" name="suffix" value="{{ form_data.suffix }}" required>
+    </div>
+    <div>
+      <label for="url">URL</label>
+      <input type="url" id="url" name="url" value="{{ form_data.url }}" required>
+    </div>
+    <h3>Creators</h3>
+    {% for creator in form_data.creators %}
+      <div>
+        <label for="creator_name_{{ forloop.counter }}">Name</label>
+        <input type="text" id="creator_name_{{ forloop.counter }}" name="creators[{{ forloop.counter0 }}][name]" value="{{ creator.name }}" required>
+      </div>
+      <div>
+        <label for="creator_nameType_{{ forloop.counter }}">Name Type</label>
+        <input type="text" id="creator_nameType_{{ forloop.counter }}" name="creators[{{ forloop.counter0 }}][nameType]" value="{{ creator.nameType }}" required>
+      </div>
+      <!-- Add other creator fields similarly -->
+    {% endfor %}
+    <h3>Titles</h3>
+    {% for title in form_data.titles %}
+      <div>
+        <label for="title_{{ forloop.counter }}">Title</label>
+        <input type="text" id="title_{{ forloop.counter }}" name="titles[{{ forloop.counter0 }}][title]" value="{{ title.title }}" required>
+      </div>
+      <div>
+        <label for="title_lang_{{ forloop.counter }}">Language</label>
+        <input type="text" id="title_lang_{{ forloop.counter }}" name="titles[{{ forloop.counter0 }}][lang]" value="{{ title.lang }}" required>
+      </div>
+    {% endfor %}
+  </form>
   <a href="{% url 'admin:curtain_datacite_changelist' %}">Back to list</a>
 {% endblock %}
