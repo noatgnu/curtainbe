@@ -49,7 +49,7 @@ class DataCiteAdmin(admin.ModelAdmin):
                 return redirect('admin:curtain_datacite_changelist')
         else:
             form = DataCiteForm(instance=datacite)
-        return render(request, 'admin/review_datacite.html', {'form': form, 'datacite': datacite})
+        return render(request, 'admin/review_datacite.html', {'form': form, 'datacite': datacite, 'form_data': datacite.form_data})
 
     def approve_datacite(self, request, queryset):
         for datacite in queryset:

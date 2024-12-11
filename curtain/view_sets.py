@@ -574,7 +574,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                     user_datacite_count_today = DataCite.objects.filter(user=self.request.user, created__date=timezone.now().date()).count()
                     if user_datacite_count_today >= settings.DATACITE_MAX_DOI_PER_DAY_PER_USER:
                         return Response(status=status.HTTP_400_BAD_REQUEST)
-                    if curtain.owners.filter(id=self.request.user.id).exists() or self.request.user.is_staff:
+                    if curtain.owners.filter(id=self.request.user).exists() or self.request.user.is_staff:
                         client = DataCiteRESTClient(
                             username=settings.DATACITE_USERNAME,
                             password=settings.DATACITE_PASSWORD,
