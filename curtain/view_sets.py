@@ -596,7 +596,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         data_cite.status = "draft"
                         data_cite.save()
 
-                        return Response({"doi": doi},status=status.HTTP_201_CREATED)
+                        return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_201_CREATED)
             return Response(status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
