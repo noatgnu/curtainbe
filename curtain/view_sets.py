@@ -591,7 +591,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         )
                         data_cite.save()
                         doi = client.draft_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}",
-                                               metadata=form_data, url=form_data["url"])
+                                               metadata=form_data)
                         data_cite.doi = doi
                         data_cite.status = "draft"
                         data_cite.save()
