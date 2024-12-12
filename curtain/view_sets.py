@@ -632,12 +632,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         data_cite.title = form_data["titles"][0]["title"]
         data_cite.contact_email = self.request.data["contact_email"]
         data_cite.pii_statement = self.request.data["pii_statement"]
-        if data_cite.lock:
-            if request.user.is_staff:
-                if data_cite.lock != request.data["lock"]:
-                    data_cite.lock = request.data["lock"]
-            else:
-                return Response(status=status.HTTP_401_UNAUTHORIZED)
+
         client = DataCiteRESTClient(
             username=settings.DATACITE_USERNAME,
             password=settings.DATACITE_PASSWORD,
@@ -674,6 +669,18 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         data_cite.send_notification()
                     return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
         return Response(status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=["post"], detail=True, permission_classes=[permissions.IsAuthenticated])
+    def lock(self, request, pk=None):
+        data_cite = self.get_object()
+        if data_cite.lock:
+            if request.user.is_staff:
+                if data_cite.lock != request.data["lock"]:
+                    data_cite.lock = request.data["lock"]
+            else:
+                return Response(status=status.HTTP_401_UNAUTHORIZED)
+        data_cite.save()
+        return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_random_suffix(self, request, *args, **kwargs):
