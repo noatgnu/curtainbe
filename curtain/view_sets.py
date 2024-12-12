@@ -620,7 +620,8 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         data_cite: DataCite = self.get_object()
-
+        if data_cite.lock:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
         if data_cite.user != self.request.user:
             return Response(status=status.HTTP_401_UNAUTHORIZED)
         form_data = self.request.data["form"]
@@ -640,6 +641,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
             test_mode=settings.DATACITE_TEST_MODE
         )
         client.update_doi(doi=data_cite.doi, metadata=form_data)
+        data_cite.lock = True
         data_cite.save()
         return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
 
