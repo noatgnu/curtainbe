@@ -180,7 +180,7 @@ class DataCite(models.Model):
         ("rejected", "Rejected")
     ]
     status = models.CharField(max_length=10, choices=status_choices, default="pending")
-
+    lock = models.BooleanField(default=True)
     doi = models.TextField(blank=True, null=True)
     title = models.TextField(blank=True, null=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, related_name="data_cite", blank=True, null=True)

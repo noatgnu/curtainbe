@@ -10,6 +10,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from datacite import schema45, DataCiteRESTClient
+from django.contrib.admin.templatetags.admin_list import pagination
 from django.core.files.base import File as djangoFile
 from django.contrib.auth.models import User, AnonymousUser
 from django.core.signing import TimestampSigner
@@ -23,6 +24,7 @@ from rest_flex_fields import is_expanded
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_framework import viewsets, filters, permissions
 from rest_framework.decorators import action
+from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.response import Response
 import pandas as pd
@@ -546,9 +548,24 @@ class DataCiteViewSets(viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ("id", "created")
     ordering = ("created", "id")
+    pagination_class = LimitOffsetPagination
 
     def get_queryset(self):
-        return self.queryset.filter(user=self.request.user)
+        status = self.request.query_params.get("status", None)
+        title = self.request.query_params.get("title", None)
+        manage = self.request.query_params.get("manage", "false")
+        query = Q()
+        if status:
+            query &= Q(status=status)
+        if title:
+            query &= Q(title__icontains=title)
+        if manage == "true":
+            if self.request.user.is_staff:
+                return self.queryset.filter(query)
+            else:
+                return self.queryset.none()
+        query &= Q(user=self.request.user)
+        return self.queryset.filter(query)
 
     def create(self, request, *args, **kwargs):
         if "contact_email" not in self.request.data or "pii_statement" not in self.request.data or "token" not in self.request.data or "form" not in self.request.data or "linkID" not in self.request.data:
@@ -602,27 +619,32 @@ class DataCiteViewSets(viewsets.ModelViewSet):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
-        data_cite = self.get_object()
-        if not request.user.is_staff:
+        data_cite: DataCite = self.get_object()
+
+        if data_cite.user != self.request.user:
             return Response(status=status.HTTP_401_UNAUTHORIZED)
         form_data = self.request.data["form"]
-        # validate form data using pydantic
         try:
             schema45.validate(data=form_data)
         except ValueError as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         data_cite.form_data = form_data
-        if request.data["status"] == "published":
-            if data_cite.status == "draft":
-                client = DataCiteRESTClient(
-                    username=settings.DATACITE_USERNAME,
-                    password=settings.DATACITE_PASSWORD,
-                    prefix=settings.DATACITE_PREFIX,
-                    test_mode=settings.DATACITE_TEST_MODE
-                )
-                client.show_doi(data_cite.doi)
-                data_cite.save()
-                return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
+        data_cite.title = form_data["titles"][0]["title"]
+        data_cite.contact_email = self.request.data["contact_email"]
+        data_cite.pii_statement = self.request.data["pii_statement"]
+        if data_cite.lock:
+            if request.user.is_staff:
+                if data_cite.lock != request.data["lock"]:
+                    data_cite.lock = request.data["lock"]
+            else:
+                return Response(status=status.HTTP_401_UNAUTHORIZED)
+        client = DataCiteRESTClient(
+            username=settings.DATACITE_USERNAME,
+            password=settings.DATACITE_PASSWORD,
+            prefix=settings.DATACITE_PREFIX,
+            test_mode=settings.DATACITE_TEST_MODE
+        )
+        client.update_doi(doi=data_cite.doi, metadata=form_data)
         data_cite.save()
         return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
 
@@ -630,6 +652,28 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         data_cite = self.get_object()
         data_cite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(methods=["post"], detail=True, permission_classes=[permissions.IsAuthenticated])
+    def change_status(self, request, pk=None):
+        data_cite = self.get_object()
+        if not request.user.is_staff:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        if "status" in self.request.data:
+            if self.request.data["status"] != data_cite.status:
+                if self.request.data["status"] in ["published", "draft", "rejected"]:
+                    data_cite.status = self.request.data["status"]
+                    client = DataCiteRESTClient(
+                        username=settings.DATACITE_USERNAME,
+                        password=settings.DATACITE_PASSWORD,
+                        prefix=settings.DATACITE_PREFIX,
+                        test_mode=settings.DATACITE_TEST_MODE
+                    )
+                    client.show_doi(doi=data_cite.doi)
+                    data_cite.save()
+                    if data_cite.status == "published":
+                        data_cite.send_notification()
+                    return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_400_BAD_REQUEST)
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_random_suffix(self, request, *args, **kwargs):
