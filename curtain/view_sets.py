@@ -669,10 +669,10 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         prefix=settings.DATACITE_PREFIX,
                         test_mode=settings.DATACITE_TEST_MODE
                     )
-                    client.show_doi(doi=data_cite.doi)
-                    data_cite.save()
                     if data_cite.status == "published":
-                        data_cite.send_notification()
+                        client.show_doi(doi=data_cite.doi)
+                    data_cite.save()
+                    data_cite.send_notification()
                     return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
