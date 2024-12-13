@@ -547,7 +547,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, JSONParser]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ("id", "created")
-    ordering = ("created", "id")
+    ordering = ("-updated", "id")
     pagination_class = LimitOffsetPagination
 
     def get_queryset(self):
