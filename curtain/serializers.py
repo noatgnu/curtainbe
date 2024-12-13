@@ -99,6 +99,14 @@ class LastAccessSerializer(serializers.ModelSerializer):
         fields = ["id", "last_access", "curtain"]
 
 class DataCiteSerializer(serializers.ModelSerializer):
+    curtain = serializers.SerializerMethodField()
+
+    def get_curtain(self, data_cite):
+        if data_cite.curtain:
+            return data_cite.curtain.link_id
+        else:
+            return None
+
     class Meta:
         model = DataCite
         fields = ["id", "updated", "created", "curtain", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock"]
