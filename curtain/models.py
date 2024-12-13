@@ -193,6 +193,9 @@ class DataCite(models.Model):
         null=True
     )
 
+    class Meta:
+        ordering = ["-updated"]
+
     def send_notification(self):
         send_mail(
             'Curtain Data Cite Notification',
