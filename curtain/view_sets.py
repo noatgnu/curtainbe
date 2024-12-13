@@ -554,11 +554,15 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         status = self.request.query_params.get("status", None)
         title = self.request.query_params.get("title", None)
         manage = self.request.query_params.get("manage", "false")
+        curtain_type = self.request.query_params.get("curtain_type", None)
+
         query = Q()
         if status:
             query &= Q(status=status)
         if title:
             query &= Q(title__icontains=title)
+        if curtain_type:
+            query &= Q(curtain__curtain_type=curtain_type)
         if manage == "true":
             if self.request.user.is_staff:
                 return self.queryset.filter(query)

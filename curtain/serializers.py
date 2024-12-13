@@ -114,7 +114,7 @@ class DataCiteSerializer(serializers.ModelSerializer):
             return data_cite.curtain.curtain_type
         else:
             return None
-    
+
     class Meta:
         model = DataCite
         fields = ["id", "updated", "created", "curtain", "curtain_type", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock"]
