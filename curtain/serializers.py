@@ -48,6 +48,7 @@ class CurtainSerializer(serializers.ModelSerializer):
         else:
             return None
 
+
     class Meta:
         model = Curtain
         fields = ["id", "created", "link_id", "file", "enable", "description", "curtain_type", "encrypted", "permanent", "data_cite"]
@@ -100,6 +101,7 @@ class LastAccessSerializer(serializers.ModelSerializer):
 
 class DataCiteSerializer(serializers.ModelSerializer):
     curtain = serializers.SerializerMethodField()
+    curtain_type = serializers.SerializerMethodField()
 
     def get_curtain(self, data_cite):
         if data_cite.curtain:
@@ -107,6 +109,12 @@ class DataCiteSerializer(serializers.ModelSerializer):
         else:
             return None
 
+    def get_curtain_type(self, data_cite):
+        if data_cite.curtain:
+            return data_cite.curtain.curtain_type
+        else:
+            return None
+    
     class Meta:
         model = DataCite
-        fields = ["id", "updated", "created", "curtain", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock"]
+        fields = ["id", "updated", "created", "curtain", "curtain_type", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock"]
