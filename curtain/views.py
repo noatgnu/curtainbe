@@ -228,9 +228,9 @@ class PrimitiveStatsTestView(APIView):
         test_type = request.data["type"]
         test_data = request.data["data"]
         if test_type == "t-test":
-            st, p, f = ttest_ind(test_data[0], test_data[1])
+            x = ttest_ind(test_data[0], test_data[1])
             return Response(data={
-                "test_statistic": st, "p_value": p, "degrees_of_freedom": f
+                "test_statistic": x.statistic, "p_value": x.pvalue, "degrees_of_freedom": x.df
             })
         print(test_type, test_data)
         return Response(status=status.HTTP_400_BAD_REQUEST)
