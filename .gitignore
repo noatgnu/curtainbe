@@ -352,3 +352,4 @@ poetry.toml
 # End of https://www.toptal.com/developers/gitignore/api/django,jetbrains+all,python
 docker-compose-cloudflare.yml
 /docker-compose.dev.yml
+*.md
