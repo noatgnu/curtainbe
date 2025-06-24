@@ -2,6 +2,7 @@ import base64
 import io
 import json
 
+import globus_sdk
 import numpy as np
 import pandas as pd
 from cryptography.hazmat.backends import default_backend
@@ -100,4 +101,9 @@ def encrypt_data(public_key, data: bytes):
         )
     ))
     return encrypted
+
+def get_globus_access_token(globus_refresh_token: str, globus_client_id: str):
+    client = globus_sdk.NativeAppAuthClient(globus_client_id)
+    token_response = client.oauth2_refresh_token(globus_refresh_token)
+    return token_response["access_token"]
 

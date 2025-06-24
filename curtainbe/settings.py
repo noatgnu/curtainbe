@@ -262,10 +262,6 @@ DATACITE_MAX_DOI_PER_DAY_PER_USER = int(os.environ.get("DATACITE_MAX_DOI_PER_DAY
 if os.environ.get("DATACITE_TEST_MODE") == "False":
     DATACITE_TEST_MODE = False
 
-
-
-
-
 if os.environ.get("WORKING_ENV") == "PRODUCTION":
     EMAIL_BACKEND = 'django_ses.SESBackend'
     NOTIFICATION_EMAIL_FROM = os.environ.get("NOTIFICATION_EMAIL_FROM", "")
@@ -368,3 +364,6 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
             CURTAIN_DEFAULT_USER_CAN_POST = True
         else:
             CURTAIN_DEFAULT_USER_CAN_POST = False
+
+GLOBUS_CLIENT_ID = os.environ.get("GLOBUS_CLIENT_ID", "")
+GLOBUS_REFRESH_TOKEN = os.environ.get("GLOBUS_REFRESH_TOKEN", "")

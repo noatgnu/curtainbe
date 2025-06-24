@@ -577,8 +577,6 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         signer = TimestampSigner()
         try:
             suffix = signer.unsign(self.request.data["token"], max_age=timedelta(minutes=30))
-
-
             form_data = self.request.data["form"]
             # validate form data using pydantic
             try:
