@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timedelta
 
 import django_rq
@@ -161,12 +162,19 @@ class KinaseLibraryProxyView(APIView):
     def get(self, request, format=None):
         # check if the request contains the sequence
         if request.query_params['sequence']:
-            s = kl.Substrate(request.query_params['sequence'])
-            #res = requests.get(f"https://kinase-library.phosphosite.org/api/scorer/score-site/{request.query_params['sequence']}/")
-            res = s.predict()
-            res = res.reset_index()
-            data = res.to_dict()
-            return Response(data=data)
+            # index of s/t/y in the sequence case sensitive
+            letters = ['s', 't', 'y']
+            if not any(letter in request.query_params['sequence'].lower() for letter in letters):
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+            for letter in letters:
+                pos = str.find(request.query_params['sequence'], letter)
+                if pos != -1:
+                    s = kl.Substrate(request.query_params['sequence'], phos_pos=pos+1)
+                    #res = requests.get(f"https://kinase-library.phosphosite.org/api/scorer/score-site/{request.query_params['sequence']}/")
+                    res = s.predict()
+                    res = res.reset_index()
+                    data = res.to_dict()
+                    return Response(data=data)
         # if the request does not contain the sequence, return a 400 error
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
