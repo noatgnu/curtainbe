@@ -173,7 +173,7 @@ class KinaseLibraryProxyView(APIView):
                     #res = requests.get(f"https://kinase-library.phosphosite.org/api/scorer/score-site/{request.query_params['sequence']}/")
                     res = s.predict()
                     res = res.reset_index()
-                    data = res.to_dict()
+                    data = res.to_dict("records")
                     return Response(data=data)
         # if the request does not contain the sequence, return a 400 error
         return Response(status=status.HTTP_400_BAD_REQUEST)
