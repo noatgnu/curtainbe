@@ -47,6 +47,7 @@ from curtain.utils import is_user_staff, delete_file_related_objects, calculate_
     check_nan_return_none, get_uniprot_data, encrypt_data
 from curtain.validations import curtain_query_schema, kinase_library_query_schema, data_filter_list_query_schema
 from curtainbe import settings
+import kinase_library as kl
 
 
 class UserViewSet(FlexFieldsMixin, FiltersMixin, viewsets.ModelViewSet):

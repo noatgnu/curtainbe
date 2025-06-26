@@ -20,7 +20,7 @@ from curtainbe import settings
 import requests
 from request.models import Request
 from curtain.worker_tasks import compare_session
-
+import kinase_library as kl
 
 class LogoutView(APIView):
     permission_classes = (IsAuthenticated,)
@@ -161,8 +161,12 @@ class KinaseLibraryProxyView(APIView):
     def get(self, request, format=None):
         # check if the request contains the sequence
         if request.query_params['sequence']:
-            res = requests.get(f"https://kinase-library.phosphosite.org/api/scorer/score-site/{request.query_params['sequence']}/")
-            return Response(data=res.json())
+            s = kl.Substrate(request.query_params['sequence'])
+            #res = requests.get(f"https://kinase-library.phosphosite.org/api/scorer/score-site/{request.query_params['sequence']}/")
+            res = s.predict()
+            res = res.reset_index()
+            data = res.to_dict()
+            return Response(data=data)
         # if the request does not contain the sequence, return a 400 error
         return Response(status=status.HTTP_400_BAD_REQUEST)
 

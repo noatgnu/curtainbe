@@ -38,6 +38,7 @@ datacite = "^1.2.0"
 pydantic = "^2.10.1"
 django-ses = {extras = ["events"], version = "^4.3.0"}
 globus-sdk = "^3.50.0"
+kinase-library = "^1.4.1"
 
 
 [build-system]
