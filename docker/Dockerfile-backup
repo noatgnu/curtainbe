@@ -1,0 +1,62 @@
+FROM python:3.10-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install PostgreSQL client for database backups
+RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg > /dev/null
+RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 7FCC7D46ACCC4CF8
+RUN apt-get update
+RUN apt-get -y install postgresql-client-15 cron
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and Django application
+COPY requirements.txt /app/
+RUN pip install -r requirements.txt
+
+# Copy the entire application
+COPY . /app/
+
+# Create backup directory
+RUN mkdir -p /app/backups
+
+# Create backup script
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+# Get current timestamp\n\
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")\n\
+\n\
+echo "Starting database backup at $TIMESTAMP"\n\
+\n\
+# Run Django dbbackup command\n\
+cd /app\n\
+python manage.py dbbackup --clean\n\
+\n\
+echo "Database backup completed at $(date)"\n\
+\n\
+# Clean old Django backups if using local storage\n\
+# Note: --clean flag in dbbackup already handles cleanup based on your Django settings\n\
+' > /app/backup_script.sh
+
+RUN chmod +x /app/backup_script.sh
+
+# Create crontab for scheduled backups
+RUN echo '# Database backup every day at 2 AM\n\
+0 2 * * * /app/backup_script.sh >> /var/log/backup.log 2>&1\n\
+\n\
+# Database backup every 6 hours (optional)\n\
+# 0 */6 * * * /app/backup_script.sh >> /var/log/backup.log 2>&1\n\
+' > /etc/cron.d/backup-cron
+
+RUN chmod 0644 /etc/cron.d/backup-cron
+RUN crontab /etc/cron.d/backup-cron
+
+# Create log file
+RUN touch /var/log/backup.log
+
+# Start cron and keep container running
+CMD ["sh", "-c", "cron && tail -f /var/log/backup.log"]
