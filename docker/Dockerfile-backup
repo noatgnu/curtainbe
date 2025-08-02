@@ -34,7 +34,7 @@ echo "Starting database backup at $TIMESTAMP"\n\
 \n\
 # Run Django dbbackup command\n\
 cd /app\n\
-python manage.py dbbackup --clean\n\
+python3 manage.py dbbackup --clean\n\
 \n\
 echo "Database backup completed at $(date)"\n\
 \n\
