@@ -1,4 +1,5 @@
 FROM python:3.10-bookworm
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -16,5 +17,5 @@ RUN pip install -r requirements.txt
 RUN python manage.py collectstatic
 
 EXPOSE 8000
-CMD ["gunicorn", "curtainbe.asgi:application",  "-k", "uvicorn.workers.UvicornWorker", "--timeout", "300", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "curtainbe.asgi:application", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "300", "--graceful-timeout", "30", "--max-requests", "1000", "--max-requests-jitter", "100", "--preload"]
 #CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "celsusdjango.wsgi:application"]
