@@ -1,17 +1,18 @@
 FROM python:3.10-bookworm
 
+ARG TARGETARCH
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 
-ARG TARGETARCH
 ENV SUPERCRONIC_VERSION=v0.2.33
+
 RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/apt.postgresql.org.gpg > /dev/null
 RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 7FCC7D46ACCC4CF8
 RUN apt-get update
 RUN apt-get -y install postgresql-client-15 cron
-RUN export SUPERCRONIC_URL="https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-${SUPERCRONIC_ARCH}" && \
+RUN export SUPERCRONIC_URL="https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64" && \
     export SUPERCRONIC="supercronic-linux-amd64" && \
     curl -fsSLO "$SUPERCRONIC_URL" && \
     echo "73ddda42a9ad1adf21c0a6e52b8a48dbc24b1ea8  ${SUPERCRONIC}" | sha1sum -c - && \
