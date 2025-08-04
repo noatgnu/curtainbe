@@ -1,6 +1,5 @@
 FROM python:3.10-bookworm
 
-ARG TARGETARCH
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -36,4 +35,4 @@ ENV DJANGO_SETTINGS_MODULE=curtainbe.settings
 ENV PYTHONPATH=/app
 
 # Use supercronic to run the cron file
-CMD ["supercronic", "/app/cron"]
+CMD ["/usr/local/bin/supercronic", "/app/cron"]
