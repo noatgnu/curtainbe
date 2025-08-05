@@ -17,7 +17,7 @@ class Command(BaseCommand):
             f"Starting backup at {current_time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
         subprocess.run(
-            ["python", "manage.py", "dbbackup", "--compress", "--output", f"/backups/db_backup_{current_time.strftime('%Y%m%d_%H%M%S')}.sql.gz"],
+            ["python", "manage.py", "dbbackup", "--compress", "-O", f"/backups/db_backup_{current_time.strftime('%Y%m%d_%H%M%S')}.sql.gz"],
             check=True
         )
         logging.log(

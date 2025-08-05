@@ -1,1 +1,1 @@
-0 2 * * * python /app/manage.py local_backup
+0 2 * * * cd /app/ & python manage.py local_backup
