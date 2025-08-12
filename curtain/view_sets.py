@@ -180,7 +180,18 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         # }
         # logging.info(c.file.url)
         LastAccess.objects.create(curtain=c)
-        return Response(data={"url": c.file.url}, status=status.HTTP_200_OK)
+        # check if storage backend is S3 or similar
+        if settings.STORAGES["default"]["BACKEND"] == "storages.backends.gcloud.GoogleCloudStorage" or settings.STORAGES["default"]["BACKEND"] == "storages.backends.s3boto3.S3Boto3Storage":
+            return Response(data={"url": c.file.url}, status=status.HTTP_200_OK)
+        elif settings.STORAGES["default"]["BACKEND"] == "django.core.files.storage.FileSystemStorage":
+            # read the file as json and return it
+            try:
+                with open(c.file.path, "rb") as f:
+                    data = json.load(f)
+                response = Response(data=data, status=status.HTTP_200_OK)
+                return response
+            except FileNotFoundError:
+                return Response(status=status.HTTP_404_NOT_FOUND)
 
     @action(methods=["post"], detail=True, permission_classes=[permissions.IsAdminUser | IsCurtainOwner])
     def generate_token(self, request, pk=None, link_id=None):

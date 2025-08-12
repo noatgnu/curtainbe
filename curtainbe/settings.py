@@ -262,6 +262,27 @@ DATACITE_MAX_DOI_PER_DAY_PER_USER = int(os.environ.get("DATACITE_MAX_DOI_PER_DAY
 if os.environ.get("DATACITE_TEST_MODE") == "False":
     DATACITE_TEST_MODE = False
 
+if os.environ.get("WORKING_ENV") == "DEBUG":
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('POSTGRES_NAME'),
+            'USER': os.environ.get('POSTGRES_USER'),
+            'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
+            'HOST': os.environ.get('POSTGRES_HOST', 'db'),
+            'PORT': int(os.environ.get('POSTGRES_PORT', '5432')),
+        },
+    }
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+                "symmetric_encryption_keys": [SECRET_KEY]
+            },
+        },
+    }
+
 if os.environ.get("WORKING_ENV") == "PRODUCTION":
     EMAIL_BACKEND = 'django_ses.SESBackend'
     NOTIFICATION_EMAIL_FROM = os.environ.get("NOTIFICATION_EMAIL_FROM", "")

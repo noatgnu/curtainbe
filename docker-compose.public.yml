@@ -47,7 +47,7 @@ services:
       - celsus-net
   db:
     container_name: curtaindb
-    image: postgres:14.5
+    image: postgres:15
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
