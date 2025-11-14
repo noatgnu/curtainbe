@@ -1,31 +1,369 @@
 from datacite import DataCiteRESTClient
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth.models import User
 from django import forms
 from django.forms import formset_factory
 from django.utils.html import format_html
-from django.urls import path
+from django.urls import path, reverse
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
+from django.utils.safestring import mark_safe
 
 from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, ContributorForm, DescriptionForm, \
     RightsForm, AlternateIdentifierForm, RelatedIdentifierForm, FundingReferenceForm
-from .models import DataCite
+from .models import (
+    DataCite, Curtain, DataFilterList, ExtraProperties, UserAPIKey, UserPublicKey,
+    SocialPlatform, KinaseLibraryModel, CurtainAccessToken, DataAESEncryptionFactors,
+    DataHash, LastAccess
+)
 from django.conf import settings
-from curtain.models import Curtain, DataFilterList, DataCite
+
+
+class ExtraPropertiesInline(admin.StackedInline):
+    model = ExtraProperties
+    can_delete = False
+    verbose_name_plural = 'Extra Properties'
+    fk_name = 'user'
+    fields = ('curtain_link_limits', 'curtain_link_limit_exceed', 'curtain_post', 'social_platform', 'default_public_key')
+
+
+class UserAPIKeyInline(admin.TabularInline):
+    model = UserAPIKey
+    extra = 0
+    readonly_fields = ('created', 'prefix')
+    fields = ('name', 'prefix', 'can_read', 'can_create', 'can_update', 'can_delete', 'revoked')
+
+
+class UserPublicKeyInline(admin.TabularInline):
+    model = UserPublicKey
+    extra = 0
+    readonly_fields = ('created',)
+    fields = ('created', 'public_key')
+
+
+class CustomUserAdmin(BaseUserAdmin):
+    inlines = (ExtraPropertiesInline, UserAPIKeyInline, UserPublicKeyInline)
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active', 'date_joined', 'curtain_count')
+    list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
+
+    def curtain_count(self, obj):
+        return obj.curtain.count()
+    curtain_count.short_description = 'Curtains'
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.prefetch_related('curtain')
+
+
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)
+
+
+admin.site.site_header = 'CurtainBE Administration'
+admin.site.site_title = 'CurtainBE Admin'
+admin.site.index_title = 'Welcome to CurtainBE Administration'
+
+
+class DataAESEncryptionFactorsInline(admin.TabularInline):
+    model = DataAESEncryptionFactors
+    extra = 0
+    readonly_fields = ('created', 'encrypted_with')
+    fields = ('created', 'encrypted_decryption_key', 'encrypted_iv', 'encrypted_with')
+
+
+class DataHashInline(admin.TabularInline):
+    model = DataHash
+    extra = 0
+    readonly_fields = ('created',)
+    fields = ('created', 'hash')
+
+
+class CurtainAccessTokenInline(admin.TabularInline):
+    model = CurtainAccessToken
+    extra = 0
+    readonly_fields = ('created', 'token')
+    fields = ('created', 'token')
+
+
+class LastAccessInline(admin.TabularInline):
+    model = LastAccess
+    extra = 0
+    readonly_fields = ('last_access',)
+    fields = ('last_access',)
+    max_num = 1
 
 
 @admin.register(Curtain)
 class CurtainAdmin(admin.ModelAdmin):
-    pass
+    list_display = ('link_id_short', 'curtain_type', 'created', 'updated', 'owner_list', 'enable', 'permanent', 'encrypted')
+    list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', 'created', 'updated')
+    search_fields = ('link_id', 'description', 'owners__username')
+    readonly_fields = ('created', 'updated', 'link_id')
+    filter_horizontal = ('owners',)
+    date_hierarchy = 'created'
+    list_per_page = 20
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('link_id', 'curtain_type', 'description')
+        }),
+        ('File & Ownership', {
+            'fields': ('file', 'owners')
+        }),
+        ('Settings', {
+            'fields': ('enable', 'permanent', 'encrypted')
+        }),
+        ('Timestamps', {
+            'fields': ('created', 'updated'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    inlines = [LastAccessInline, CurtainAccessTokenInline, DataAESEncryptionFactorsInline, DataHashInline]
+
+    def link_id_short(self, obj):
+        return str(obj.link_id)[:8] + '...'
+    link_id_short.short_description = 'Link ID'
+
+    def owner_list(self, obj):
+        owners = obj.owners.all()
+        if owners:
+            return ', '.join([owner.username for owner in owners[:3]])
+        return 'None'
+    owner_list.short_description = 'Owners'
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.prefetch_related('owners')
+
+
+@admin.register(ExtraProperties)
+class ExtraPropertiesAdmin(admin.ModelAdmin):
+    list_display = ('user', 'curtain_link_limits', 'social_platform', 'curtain_link_limit_exceed', 'curtain_post')
+    list_filter = ('curtain_link_limit_exceed', 'curtain_post', 'social_platform')
+    search_fields = ('user__username', 'user__email')
+    readonly_fields = ('user',)
+
+    fieldsets = (
+        ('User', {
+            'fields': ('user',)
+        }),
+        ('Curtain Settings', {
+            'fields': ('curtain_link_limits', 'curtain_link_limit_exceed', 'curtain_post')
+        }),
+        ('Social & Encryption', {
+            'fields': ('social_platform', 'default_public_key')
+        }),
+    )
+
+
+@admin.register(UserAPIKey)
+class UserAPIKeyAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'prefix', 'created', 'can_read', 'can_create', 'can_update', 'can_delete', 'revoked')
+    list_filter = ('can_read', 'can_create', 'can_update', 'can_delete', 'revoked', 'created')
+    search_fields = ('name', 'user__username', 'prefix')
+    readonly_fields = ('created', 'prefix')
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'user', 'prefix', 'created')
+        }),
+        ('Permissions', {
+            'fields': ('can_read', 'can_create', 'can_update', 'can_delete')
+        }),
+        ('Status', {
+            'fields': ('revoked',)
+        }),
+    )
+
+
+@admin.register(UserPublicKey)
+class UserPublicKeyAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'created', 'public_key_preview')
+    list_filter = ('created',)
+    search_fields = ('user__username',)
+    readonly_fields = ('created',)
+    date_hierarchy = 'created'
+
+    def public_key_preview(self, obj):
+        return str(obj.public_key)[:50] + '...' if obj.public_key else 'N/A'
+    public_key_preview.short_description = 'Public Key'
+
+
+@admin.register(SocialPlatform)
+class SocialPlatformAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+    search_fields = ('name',)
 
 
 @admin.register(DataFilterList)
 class DataFilterListAdmin(admin.ModelAdmin):
-    pass
+    list_display = ('name', 'category', 'user', 'default')
+    list_filter = ('category', 'default')
+    search_fields = ('name', 'category', 'user__username')
+
+    fieldsets = (
+        ('Filter Information', {
+            'fields': ('name', 'category', 'data')
+        }),
+        ('Settings', {
+            'fields': ('default', 'user')
+        }),
+    )
+
+
+@admin.register(KinaseLibraryModel)
+class KinaseLibraryModelAdmin(admin.ModelAdmin):
+    list_display = ('entry', 'position', 'residue', 'data_preview')
+    list_filter = ('residue',)
+    search_fields = ('entry', 'data')
+
+    def data_preview(self, obj):
+        return str(obj.data)[:50] + '...' if len(str(obj.data)) > 50 else str(obj.data)
+    data_preview.short_description = 'Data'
+
+
+@admin.register(CurtainAccessToken)
+class CurtainAccessTokenAdmin(admin.ModelAdmin):
+    list_display = ('id', 'curtain_link', 'created', 'token_preview')
+    list_filter = ('created',)
+    search_fields = ('curtain__link_id', 'token')
+    readonly_fields = ('created',)
+    date_hierarchy = 'created'
+
+    def curtain_link(self, obj):
+        if obj.curtain:
+            return str(obj.curtain.link_id)[:8] + '...'
+        return 'N/A'
+    curtain_link.short_description = 'Curtain'
+
+    def token_preview(self, obj):
+        return str(obj.token)[:30] + '...' if len(str(obj.token)) > 30 else str(obj.token)
+    token_preview.short_description = 'Token'
+
+
+@admin.register(DataAESEncryptionFactors)
+class DataAESEncryptionFactorsAdmin(admin.ModelAdmin):
+    list_display = ('id', 'curtain_link', 'created', 'encrypted_with')
+    list_filter = ('created',)
+    search_fields = ('curtain__link_id',)
+    readonly_fields = ('created',)
+    date_hierarchy = 'created'
+
+    def curtain_link(self, obj):
+        if obj.curtain:
+            return str(obj.curtain.link_id)[:8] + '...'
+        return 'N/A'
+    curtain_link.short_description = 'Curtain'
+
+
+@admin.register(DataHash)
+class DataHashAdmin(admin.ModelAdmin):
+    list_display = ('id', 'curtain_link', 'created', 'hash_preview')
+    list_filter = ('created',)
+    search_fields = ('curtain__link_id', 'hash')
+    readonly_fields = ('created',)
+    date_hierarchy = 'created'
+
+    def curtain_link(self, obj):
+        if obj.curtain:
+            return str(obj.curtain.link_id)[:8] + '...'
+        return 'N/A'
+    curtain_link.short_description = 'Curtain'
+
+    def hash_preview(self, obj):
+        return str(obj.hash)[:20] + '...' if len(str(obj.hash)) > 20 else str(obj.hash)
+    hash_preview.short_description = 'Hash'
+
+
+@admin.register(LastAccess)
+class LastAccessAdmin(admin.ModelAdmin):
+    list_display = ('id', 'curtain_link', 'last_access')
+    list_filter = ('last_access',)
+    search_fields = ('curtain__link_id',)
+    readonly_fields = ('last_access',)
+    date_hierarchy = 'last_access'
+
+    def curtain_link(self, obj):
+        if obj.curtain:
+            return str(obj.curtain.link_id)[:8] + '...'
+        return 'N/A'
+    curtain_link.short_description = 'Curtain'
 
 class DataCiteAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'user', 'status', 'created')
-    actions = ['approve_datacite']
+    list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'lock', 'created', 'updated')
+    list_filter = ('status', 'lock', 'created', 'updated')
+    search_fields = ('title', 'doi', 'user__username', 'contact_email', 'curtain__link_id')
+    readonly_fields = ('created', 'updated', 'doi')
+    date_hierarchy = 'updated'
+    list_per_page = 20
+    actions = ['approve_datacite', 'reject_datacite', 'unlock_datacite']
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('title', 'doi', 'status', 'lock')
+        }),
+        ('User Information', {
+            'fields': ('user', 'contact_email')
+        }),
+        ('Data', {
+            'fields': ('curtain', 'form_data', 'pii_statement')
+        }),
+        ('Timestamps', {
+            'fields': ('created', 'updated'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def title_preview(self, obj):
+        if obj.title:
+            return str(obj.title)[:50] + '...' if len(str(obj.title)) > 50 else str(obj.title)
+        return 'N/A'
+    title_preview.short_description = 'Title'
+
+    def status_badge(self, obj):
+        colors = {
+            'pending': '#FFA500',
+            'published': '#28a745',
+            'draft': '#6c757d',
+            'rejected': '#dc3545'
+        }
+        color = colors.get(obj.status, '#6c757d')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+
+    def doi_link(self, obj):
+        if obj.doi:
+            return format_html('<a href="https://doi.org/{}" target="_blank">{}</a>', obj.doi, obj.doi)
+        return 'N/A'
+    doi_link.short_description = 'DOI'
+
+    def curtain_link(self, obj):
+        if obj.curtain:
+            return str(obj.curtain.link_id)[:8] + '...'
+        return 'N/A'
+    curtain_link.short_description = 'Curtain'
+
+    def reject_datacite(self, request, queryset):
+        count = queryset.update(status='rejected')
+        for datacite in queryset:
+            datacite.send_notification()
+        self.message_user(request, f"{count} DataCite(s) rejected successfully.")
+    reject_datacite.short_description = "Reject selected DataCite(s)"
+
+    def unlock_datacite(self, request, queryset):
+        count = queryset.update(lock=False)
+        self.message_user(request, f"{count} DataCite(s) unlocked successfully.")
+    unlock_datacite.short_description = "Unlock selected DataCite(s)"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('user', 'curtain')
 
     def get_urls(self):
         urls = super().get_urls()
