@@ -8,6 +8,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.db.models import Count
 from django.db.models.functions import TruncDay, TruncWeek
+from django.http import FileResponse, Http404
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
@@ -16,7 +17,7 @@ from rest_framework.response import Response
 from rq.job import Job
 from scipy.stats import ttest_ind
 
-from curtain.models import User, ExtraProperties, SocialPlatform, Curtain, UserAPIKey
+from curtain.models import User, ExtraProperties, SocialPlatform, Curtain, UserAPIKey, DataCite
 from curtainbe import settings
 import requests
 from request.models import Request
@@ -318,4 +319,23 @@ class APIKeyView(APIView):
     def get(self, request):
         keys = self.request.user.api_keys.all()
         return Response(data={"keys": [{"name": key.name} for key in keys]})
+
+
+class DataCiteFileView(APIView):
+    """
+    Public view for serving DataCite local files without authentication.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, datacite_id):
+        try:
+            datacite = DataCite.objects.get(id=datacite_id)
+            if not datacite.local_file:
+                raise Http404("File not found")
+
+            response = FileResponse(datacite.local_file.open('rb'))
+            response['Content-Disposition'] = f'inline; filename="{datacite.local_file.name.split("/")[-1]}"'
+            return response
+        except DataCite.DoesNotExist:
+            raise Http404("DataCite not found")
 

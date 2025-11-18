@@ -136,6 +136,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
@@ -388,3 +392,5 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
 
 GLOBUS_CLIENT_ID = os.environ.get("GLOBUS_CLIENT_ID", "")
 GLOBUS_REFRESH_TOKEN = os.environ.get("GLOBUS_REFRESH_TOKEN", "")
+
+SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "")

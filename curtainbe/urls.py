@@ -15,6 +15,8 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -22,11 +24,9 @@ from curtain.view_sets import UserViewSet, KinaseLibraryViewSet, DataFilterListV
     UserAPIKeyViewSets, UserPublicKeyViewSets, DataCiteViewSets
 from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHView, KinaseLibraryProxyView, \
     DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView, \
-    APIKeyView
+    APIKeyView, DataCiteFileView
 from django.contrib import admin
 
-#from curtain.contrib import admin
-#from curtain.urls import path
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'kinase_library', KinaseLibraryViewSet)
@@ -34,11 +34,6 @@ router.register(r'data_filter_list', DataFilterListViewSet)
 router.register(r'curtain', CurtainViewSet)
 router.register(r'api_key', UserAPIKeyViewSets)
 router.register(r'datacite', DataCiteViewSets)
-#router.register(r'userapikey', UserAPIKeyViewSets)
-#router.register(r'userpublickey', UserPublicKeyViewSets)
-admin.site.site_header = "CURTAIN Admin"
-admin.site.site_title = "CURTAIN Admin Portal"
-admin.site.index_title = "Welcome to CURTAIN data sharing and exploration admin portal"
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -56,5 +51,9 @@ urlpatterns = [
     path('compare-session/', CompareSessionView.as_view(), name='compare_session'),
     path('stats/summary/<int:last_n_days>/', StatsView.as_view(), name="stats_summary"),
     path(r'job/<str:job_id>/', JobResultView.as_view(), name='job_result'),
+    path('datacite/file/<int:datacite_id>/', DataCiteFileView.as_view(), name='datacite_file'),
     path('admin/', admin.site.urls),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

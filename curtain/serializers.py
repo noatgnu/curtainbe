@@ -3,6 +3,7 @@ import os
 
 from rest_flex_fields import FlexFieldsModelSerializer
 from rest_framework import serializers
+from django.urls import reverse
 
 from curtain.models import Curtain, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
     DataAESEncryptionFactors, DataHash, LastAccess, DataCite
@@ -102,6 +103,8 @@ class LastAccessSerializer(serializers.ModelSerializer):
 class DataCiteSerializer(serializers.ModelSerializer):
     curtain = serializers.SerializerMethodField()
     curtain_type = serializers.SerializerMethodField()
+    local_file = serializers.FileField(read_only=True)
+    public_file_url = serializers.SerializerMethodField()
 
     def get_curtain(self, data_cite):
         if data_cite.curtain:
@@ -115,6 +118,17 @@ class DataCiteSerializer(serializers.ModelSerializer):
         else:
             return None
 
+    def get_public_file_url(self, data_cite):
+        if data_cite.local_file:
+            file_path = reverse('datacite_file', kwargs={'datacite_id': data_cite.id})
+            if settings.SITE_DOMAIN:
+                return f"{settings.SITE_DOMAIN.rstrip('/')}{file_path}"
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(file_path)
+            return file_path
+        return None
+
     class Meta:
         model = DataCite
-        fields = ["id", "updated", "created", "curtain", "curtain_type", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock"]
+        fields = ["id", "updated", "created", "curtain", "curtain_type", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock", "local_file", "public_file_url"]

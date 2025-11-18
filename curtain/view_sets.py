@@ -15,6 +15,7 @@ from django.core.files.base import File as djangoFile
 from django.contrib.auth.models import User, AnonymousUser
 from django.core.signing import TimestampSigner
 from django.db.models import Q, Count, OuterRef, Subquery
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page, never_cache
@@ -620,7 +621,28 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                             contact_email=self.request.data["contact_email"],
                             pii_statement=self.request.data["pii_statement"]
                         )
+                        if curtain.file:
+                            data_cite.local_file.save(
+                                curtain.file.name,
+                                curtain.file,
+                                save=False
+                            )
                         data_cite.save()
+
+                        if data_cite.local_file:
+                            file_path = reverse('datacite_file', kwargs={'datacite_id': data_cite.id})
+                            if settings.SITE_DOMAIN:
+                                file_url = f"{settings.SITE_DOMAIN.rstrip('/')}{file_path}"
+                            else:
+                                file_url = request.build_absolute_uri(file_path)
+                            if "alternateIdentifiers" not in form_data:
+                                form_data["alternateIdentifiers"] = []
+                            form_data["alternateIdentifiers"].append({
+                                "alternateIdentifier": file_url,
+                                "alternateIdentifierType": "Direct data access URL"
+                            })
+                            data_cite.form_data = form_data
+
                         doi = client.draft_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}",
                                                metadata=form_data)
                         data_cite.doi = doi

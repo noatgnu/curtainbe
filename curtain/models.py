@@ -7,6 +7,7 @@ from rest_framework_api_key.crypto import KeyGenerator
 
 from curtainbe import settings
 from rest_framework_api_key.models import AbstractAPIKey, BaseAPIKeyManager
+from curtain.storage import DataCiteLocalStorage
 
 
 class ExtraProperties(models.Model):
@@ -191,6 +192,13 @@ class DataCite(models.Model):
         "Curtain", on_delete=models.SET_NULL, related_name="data_cite",
         blank=True,
         null=True
+    )
+    local_file = models.FileField(
+        upload_to="datacite_files/",
+        storage=DataCiteLocalStorage,
+        blank=True,
+        null=True,
+        help_text="Local file storage for DataCite data (stored on host, not cloud)"
     )
 
     class Meta:

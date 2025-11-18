@@ -9,6 +9,7 @@ from django.urls import path, reverse
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.utils.safestring import mark_safe
+from django.contrib.sites.shortcuts import get_current_site
 
 from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, ContributorForm, DescriptionForm, \
     RightsForm, AlternateIdentifierForm, RelatedIdentifierForm, FundingReferenceForm
@@ -292,10 +293,10 @@ class LastAccessAdmin(admin.ModelAdmin):
     curtain_link.short_description = 'Curtain'
 
 class DataCiteAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'lock', 'created', 'updated')
+    list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'has_local_file', 'lock', 'created', 'updated')
     list_filter = ('status', 'lock', 'created', 'updated')
     search_fields = ('title', 'doi', 'user__username', 'contact_email', 'curtain__link_id')
-    readonly_fields = ('created', 'updated', 'doi')
+    readonly_fields = ('created', 'updated', 'doi', 'local_file', 'local_file_link')
     date_hierarchy = 'updated'
     list_per_page = 20
     actions = ['approve_datacite', 'reject_datacite', 'unlock_datacite']
@@ -308,7 +309,8 @@ class DataCiteAdmin(admin.ModelAdmin):
             'fields': ('user', 'contact_email')
         }),
         ('Data', {
-            'fields': ('curtain', 'form_data', 'pii_statement')
+            'fields': ('curtain', 'local_file', 'local_file_link', 'form_data', 'pii_statement'),
+            'description': 'Local file is automatically copied from Curtain and stored on host filesystem'
         }),
         ('Timestamps', {
             'fields': ('created', 'updated'),
@@ -348,6 +350,19 @@ class DataCiteAdmin(admin.ModelAdmin):
             return str(obj.curtain.link_id)[:8] + '...'
         return 'N/A'
     curtain_link.short_description = 'Curtain'
+
+    def has_local_file(self, obj):
+        if obj.local_file:
+            return format_html('<span style="color: green;">✓</span>')
+        return format_html('<span style="color: red;">✗</span>')
+    has_local_file.short_description = 'Local File'
+
+    def local_file_link(self, obj):
+        if obj.local_file:
+            file_url = reverse('datacite_file', kwargs={'datacite_id': obj.id})
+            return format_html('<a href="{}" target="_blank">{}</a>', file_url, file_url)
+        return 'N/A'
+    local_file_link.short_description = 'Public File URL'
 
     def reject_datacite(self, request, queryset):
         count = queryset.update(status='rejected')

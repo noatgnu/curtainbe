@@ -35,6 +35,23 @@ You can set up and run this project using Docker Compose directly or the provide
 6. **Access the application**:
     Open your browser and go to `http://localhost:8000`.
 
+## Environment Variables
+
+### Required for Production
+
+- `SITE_DOMAIN`: Full domain URL for the site (e.g., `https://yourdomain.com`). This is used for generating public file URLs in DataCite metadata. If not set, the system will use the request Host header.
+- `SECRET_KEY`: Django secret key
+- `POSTGRES_NAME`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: Database credentials
+- `DJANGO_ALLOWED_HOSTS`: Comma-separated list of allowed hosts
+- `DJANGO_CORS_WHITELIST`: Comma-separated list of CORS allowed origins
+
+### Optional
+
+- `STORAGE_BACKEND`: Storage backend (`gcloud` or `s3`). If not set, uses local filesystem.
+- `CURTAIN_DEFAULT_USER_LINK_LIMIT`: Default curtain link limit per user (default: 0)
+- `CURTAIN_ALLOW_NON_USER_POST`: Allow non-authenticated users to post (default: False)
+- `DATACITE_USERNAME`, `DATACITE_PASSWORD`, `DATACITE_PREFIX`: DataCite API credentials
+
 ### Using Ansible Playbook
 
 1. **Clone the repository**:
