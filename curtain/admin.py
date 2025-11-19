@@ -66,6 +66,32 @@ admin.site.site_title = 'CurtainBE Admin'
 admin.site.index_title = 'Welcome to CurtainBE Administration'
 
 
+class ExpiredStatusFilter(admin.SimpleListFilter):
+    """
+    Custom filter for curtain expiry status
+    """
+    title = 'expiry status'
+    parameter_name = 'expiry_status'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('permanent', 'Permanent'),
+            ('active', 'Active (Not Expired)'),
+            ('expired', 'Expired'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'permanent':
+            return queryset.filter(permanent=True)
+        elif self.value() == 'active':
+            active_ids = [c.id for c in queryset.filter(permanent=False) if not c.is_expired]
+            return queryset.filter(id__in=active_ids)
+        elif self.value() == 'expired':
+            expired_ids = [c.id for c in queryset.filter(permanent=False) if c.is_expired]
+            return queryset.filter(id__in=expired_ids)
+        return queryset
+
+
 class DataAESEncryptionFactorsInline(admin.TabularInline):
     model = DataAESEncryptionFactors
     extra = 0
@@ -97,10 +123,10 @@ class LastAccessInline(admin.TabularInline):
 
 @admin.register(Curtain)
 class CurtainAdmin(admin.ModelAdmin):
-    list_display = ('link_id_short', 'curtain_type', 'created', 'updated', 'owner_list', 'enable', 'permanent', 'encrypted')
-    list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', 'created', 'updated')
+    list_display = ('link_id_short', 'curtain_type', 'created', 'last_access_display', 'owner_list', 'enable', 'permanent', 'expired_status', 'encrypted')
+    list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', ExpiredStatusFilter, 'created', 'updated')
     search_fields = ('link_id', 'description', 'owners__username')
-    readonly_fields = ('created', 'updated', 'link_id')
+    readonly_fields = ('created', 'updated', 'link_id', 'expired_status', 'last_access_display')
     filter_horizontal = ('owners',)
     date_hierarchy = 'created'
     list_per_page = 20
@@ -113,10 +139,10 @@ class CurtainAdmin(admin.ModelAdmin):
             'fields': ('file', 'owners')
         }),
         ('Settings', {
-            'fields': ('enable', 'permanent', 'encrypted')
+            'fields': ('enable', 'permanent', 'encrypted', 'expiry_duration', 'expired_status')
         }),
         ('Timestamps', {
-            'fields': ('created', 'updated'),
+            'fields': ('created', 'updated', 'last_access_display'),
             'classes': ('collapse',)
         }),
     )
@@ -134,9 +160,25 @@ class CurtainAdmin(admin.ModelAdmin):
         return 'None'
     owner_list.short_description = 'Owners'
 
+    def last_access_display(self, obj):
+        last_access_record = obj.last_access.order_by('-last_access').first()
+        if last_access_record:
+            return last_access_record.last_access.strftime('%Y-%m-%d %H:%M:%S')
+        return 'Never'
+    last_access_display.short_description = 'Last Access'
+
+    def expired_status(self, obj):
+        if obj.permanent:
+            return format_html('<span style="color: green;">Permanent</span>')
+        elif obj.is_expired:
+            return format_html('<span style="color: red;">Expired</span>')
+        else:
+            return format_html('<span style="color: orange;">Active</span>')
+    expired_status.short_description = 'Status'
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.prefetch_related('owners')
+        return qs.prefetch_related('owners', 'last_access')
 
 
 @admin.register(ExtraProperties)

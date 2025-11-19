@@ -37,6 +37,9 @@ class UserSerializer(FlexFieldsModelSerializer):
 class CurtainSerializer(serializers.ModelSerializer):
     file = serializers.SerializerMethodField()
     data_cite = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+    last_access_date = serializers.SerializerMethodField()
+    expiry_duration_months = serializers.SerializerMethodField()
 
     def get_file(self, record):
         _, filename = os.path.split(record.file.name)
@@ -49,10 +52,21 @@ class CurtainSerializer(serializers.ModelSerializer):
         else:
             return None
 
+    def get_is_expired(self, record):
+        return record.is_expired
+
+    def get_last_access_date(self, record):
+        last_access_record = record.last_access.order_by('-last_access').first()
+        if last_access_record:
+            return last_access_record.last_access
+        return None
+
+    def get_expiry_duration_months(self, record):
+        return int(record.expiry_duration.days / 30)
 
     class Meta:
         model = Curtain
-        fields = ["id", "created", "link_id", "file", "enable", "description", "curtain_type", "encrypted", "permanent", "data_cite"]
+        fields = ["id", "created", "link_id", "file", "enable", "description", "curtain_type", "encrypted", "permanent", "expiry_duration_months", "is_expired", "last_access_date", "data_cite"]
         lookup_field = "link_id"
 
 

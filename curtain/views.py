@@ -148,11 +148,13 @@ class ORCIDOAUTHView(APIView):
 # Get general site properties
 class SitePropertiesView(APIView):
     permission_classes = (AllowAny,)
-    # user can get this view without being authenticated
 
     def get(self, request, format=None):
         return Response(data={
-            "non_user_post": settings.CURTAIN_ALLOW_NON_USER_POST
+            "non_user_post": settings.CURTAIN_ALLOW_NON_USER_POST,
+            "allow_user_set_permanent": settings.CURTAIN_ALLOW_USER_SET_PERMANENT,
+            "expiry_duration_options": [3, 6],
+            "default_expiry_duration_months": 3
         })
 
 # Kinase Library Proxy view for getting kinase scores

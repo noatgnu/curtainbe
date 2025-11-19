@@ -265,9 +265,19 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             c.curtain_type = self.request.data["curtain_type"]
         if "permanent" in self.request.data:
             if self.request.data["permanent"] == "True":
+                if not settings.CURTAIN_ALLOW_USER_SET_PERMANENT and not request.user.is_staff:
+                    return Response(data={"error": "Only staff users can set permanent to True"}, status=status.HTTP_403_FORBIDDEN)
                 c.permanent = True
             else:
                 c.permanent = False
+
+        if "expiry_duration" in self.request.data:
+            expiry_months = int(self.request.data["expiry_duration"])
+            if expiry_months not in [3, 6]:
+                if not request.user.is_staff:
+                    return Response(data={"error": "expiry_duration must be 3 or 6 months"}, status=status.HTTP_400_BAD_REQUEST)
+            c.expiry_duration = timedelta(days=expiry_months * 30)
+
         c.save()
         if factors is not None:
             factors.curtain = c
@@ -301,6 +311,21 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 c.enable = False
         if "curtain_type" in self.request.data:
             c.curtain_type = self.request.data["curtain_type"]
+        if "permanent" in self.request.data:
+            if self.request.data["permanent"] == "True":
+                if not settings.CURTAIN_ALLOW_USER_SET_PERMANENT and not request.user.is_staff:
+                    return Response(data={"error": "Only staff users can set permanent to True"}, status=status.HTTP_403_FORBIDDEN)
+                c.permanent = True
+            else:
+                c.permanent = False
+
+        if "expiry_duration" in self.request.data:
+            expiry_months = int(self.request.data["expiry_duration"])
+            if expiry_months not in [3, 6]:
+                if not request.user.is_staff:
+                    return Response(data={"error": "expiry_duration must be 3 or 6 months"}, status=status.HTTP_400_BAD_REQUEST)
+            c.expiry_duration = timedelta(days=expiry_months * 30)
+
         c.encrypted = True
         c.save()
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
@@ -373,6 +398,19 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
                 c.enable = True
             else:
                 c.enable = False
+        if "permanent" in self.request.data:
+            if self.request.data["permanent"] == "True":
+                if not settings.CURTAIN_ALLOW_USER_SET_PERMANENT and not request.user.is_staff:
+                    return Response(data={"error": "Only staff users can set permanent to True"}, status=status.HTTP_403_FORBIDDEN)
+                c.permanent = True
+            else:
+                c.permanent = False
+        if "expiry_duration" in self.request.data:
+            expiry_months = int(self.request.data["expiry_duration"])
+            if expiry_months not in [3, 6]:
+                if not request.user.is_staff:
+                    return Response(data={"error": "expiry_duration must be 3 or 6 months"}, status=status.HTTP_400_BAD_REQUEST)
+            c.expiry_duration = timedelta(days=expiry_months * 30)
         try:
             self.encrypt_data(c)
         except ValueError as e:

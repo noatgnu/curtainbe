@@ -1,13 +1,22 @@
 import uuid
+from datetime import timedelta
 
 from django.core.mail import send_mail
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 from rest_framework_api_key.crypto import KeyGenerator
 
 from curtainbe import settings
 from rest_framework_api_key.models import AbstractAPIKey, BaseAPIKeyManager
 from curtain.storage import DataCiteLocalStorage
+
+
+def get_default_expiry_duration():
+    """
+    Returns the default expiry duration (3 months)
+    """
+    return timedelta(days=90)
 
 
 class ExtraProperties(models.Model):
@@ -57,7 +66,7 @@ class UserPublicKey(models.Model):
 class Curtain(models.Model):
     """
     This model represents a Curtain, which includes fields for creation and update timestamps, a unique link ID,
-    a file, a description, owners, enable flag, curtain type, and an encrypted flag.
+    a file, a description, owners, enable flag, curtain type, encrypted flag, and expiry date.
     """
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
@@ -79,6 +88,25 @@ class Curtain(models.Model):
     )
     permanent = models.BooleanField(default=True)
     encrypted = models.BooleanField(default=False)
+    expiry_duration = models.DurationField(default=get_default_expiry_duration, null=False)
+
+    @property
+    def is_expired(self):
+        """
+        Check if the curtain has expired based on last access and expiry duration.
+        Returns False if permanent is True.
+        Returns True if (last_access + expiry_duration) < now.
+        """
+        if self.permanent:
+            return False
+
+        last_access_record = self.last_access.order_by('-last_access').first()
+        if last_access_record:
+            expiry_time = last_access_record.last_access + self.expiry_duration
+            return timezone.now() > expiry_time
+
+        expiry_time = self.created + self.expiry_duration
+        return timezone.now() > expiry_time
 
     def __str__(self):
         owners = "None"
