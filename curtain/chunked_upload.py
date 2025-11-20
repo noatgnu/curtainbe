@@ -210,11 +210,35 @@ class CurtainChunkedUploadView(ChunkedUploadView):
 
     def on_completion(self, uploaded_file, request):
         try:
-            description = request.data.get("description", "")
-            enable = request.data.get("enable", "True") == "True"
-            curtain_type = request.data.get("curtain_type", "TP")
-            permanent = request.data.get("permanent", "True") == "True"
-            encrypted = request.data.get("encrypted", "False") == "True"
+            curtain_id = request.data.get("curtain_id")
+            link_id = request.data.get("link_id")
+            is_update = curtain_id or link_id
+
+            if is_update:
+                if curtain_id:
+                    c = Curtain.objects.filter(id=curtain_id).first()
+                else:
+                    c = Curtain.objects.filter(link_id=link_id).first()
+
+                if not c:
+                    return Response(
+                        data={"error": "Curtain session not found"},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+                if type(request.user) == AnonymousUser or request.user not in c.owners.all():
+                    return Response(
+                        data={"error": "You do not have permission to update this curtain"},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            else:
+                c = Curtain()
+
+            description = request.data.get("description", "" if not is_update else c.description)
+            enable = request.data.get("enable", "True" if not is_update else str(c.enable)) == "True"
+            curtain_type = request.data.get("curtain_type", "TP" if not is_update else c.curtain_type)
+            permanent = request.data.get("permanent", "True" if not is_update else str(c.permanent)) == "True"
+            encrypted = request.data.get("encrypted", "False" if not is_update else str(c.encrypted)) == "True"
             expiry_duration = request.data.get("expiry_duration")
 
             if permanent and not settings.CURTAIN_ALLOW_USER_SET_PERMANENT and not request.user.is_staff:
@@ -222,8 +246,6 @@ class CurtainChunkedUploadView(ChunkedUploadView):
                     data={"error": "Only staff users can set permanent to True"},
                     status=status.HTTP_403_FORBIDDEN
                 )
-
-            c = Curtain()
 
             if uploaded_file.file and os.path.exists(uploaded_file.file.path):
                 with open(uploaded_file.file.path, "rb") as f:
@@ -254,17 +276,18 @@ class CurtainChunkedUploadView(ChunkedUploadView):
 
             c.save()
 
-            if type(request.user) != AnonymousUser:
-                c.owners.add(request.user)
+            if not is_update:
+                if type(request.user) != AnonymousUser:
+                    c.owners.add(request.user)
 
-                if settings.CURTAIN_DEFAULT_USER_LINK_LIMIT != 0:
-                    total_count = request.user.curtain.count()
-                    request.user.extraproperties.curtain_link_limit_exceed = (
-                        total_count >= settings.CURTAIN_DEFAULT_USER_LINK_LIMIT
-                    )
-                else:
-                    request.user.extraproperties.curtain_link_limit_exceed = False
-                request.user.extraproperties.save()
+                    if settings.CURTAIN_DEFAULT_USER_LINK_LIMIT != 0:
+                        total_count = request.user.curtain.count()
+                        request.user.extraproperties.curtain_link_limit_exceed = (
+                            total_count >= settings.CURTAIN_DEFAULT_USER_LINK_LIMIT
+                        )
+                    else:
+                        request.user.extraproperties.curtain_link_limit_exceed = False
+                    request.user.extraproperties.save()
 
             curtain_json = CurtainSerializer(c, many=False, context={"request": request})
 
@@ -272,7 +295,7 @@ class CurtainChunkedUploadView(ChunkedUploadView):
 
             result = {
                 "curtain": curtain_json.data,
-                "message": "Curtain session created successfully from chunked upload",
+                "message": "Curtain session updated successfully from chunked upload" if is_update else "Curtain session created successfully from chunked upload",
             }
             return Response(result, status=status.HTTP_200_OK)
 

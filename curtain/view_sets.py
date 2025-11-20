@@ -519,6 +519,40 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         else:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
+    @action(methods=["patch"], detail=True, permission_classes=[
+        permissions.IsAdminUser | IsCurtainOwner
+    ])
+    def remove_owner(self, request, pk=None, link_id=None):
+        """
+        Removes an owner from the Curtain.
+        At least one owner must remain.
+        """
+        c = self.get_object()
+        if "username" in self.request.data:
+            user = User.objects.filter(username=self.request.data["username"]).first()
+            if user:
+                if user in c.owners.all():
+                    if c.owners.count() <= 1:
+                        return Response(
+                            data={"error": "Cannot remove the last owner. At least one owner must remain."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    c.owners.remove(user)
+                    c.save()
+                    return Response(status=status.HTTP_204_NO_CONTENT)
+                else:
+                    return Response(
+                        data={"error": "User is not an owner of this curtain."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                return Response(
+                    data={"error": "User not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_curtain_list(self, request, pk=None, link_id=None):
         """
