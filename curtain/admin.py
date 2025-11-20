@@ -10,6 +10,7 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 from django.contrib.sites.shortcuts import get_current_site
+from django.db import transaction
 
 from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, ContributorForm, DescriptionForm, \
     RightsForm, AlternateIdentifierForm, RelatedIdentifierForm, FundingReferenceForm
@@ -641,6 +642,32 @@ class PermanentLinkRequestAdmin(admin.ModelAdmin):
         )
     status_badge.short_description = 'Status'
 
+    def save_model(self, request, obj, form, change):
+        """
+        Handle status changes when editing individual requests.
+        """
+        if change:
+            old_obj = PermanentLinkRequest.objects.get(pk=obj.pk)
+            old_status = old_obj.status
+            new_status = obj.status
+
+            if old_status == 'pending' and new_status == 'approved':
+                with transaction.atomic():
+                    obj.approve(request.user)
+                if obj.request_type == 'permanent':
+                    self.message_user(request, f'Request approved and curtain made permanent successfully.', level='success')
+                else:
+                    self.message_user(request, f'Request approved and expiry duration extended to {obj.requested_expiry_months} months.', level='success')
+                return
+            elif old_status == 'pending' and new_status == 'rejected':
+                admin_notes = obj.admin_notes
+                with transaction.atomic():
+                    obj.reject(request.user, admin_notes)
+                self.message_user(request, f'Request rejected successfully.', level='success')
+                return
+
+        super().save_model(request, obj, form, change)
+
     def approve_requests(self, request, queryset):
         """
         Admin action to approve selected permanent link requests.
@@ -648,9 +675,10 @@ class PermanentLinkRequestAdmin(admin.ModelAdmin):
         pending_requests = queryset.filter(status='pending')
         count = 0
         for req in pending_requests:
-            req.approve(request.user)
+            with transaction.atomic():
+                req.approve(request.user)
             count += 1
-        self.message_user(request, f'{count} request(s) approved.')
+        self.message_user(request, f'{count} request(s) approved and curtain(s) updated.')
     approve_requests.short_description = 'Approve selected requests'
 
     def reject_requests(self, request, queryset):
@@ -660,7 +688,8 @@ class PermanentLinkRequestAdmin(admin.ModelAdmin):
         pending_requests = queryset.filter(status='pending')
         count = 0
         for req in pending_requests:
-            req.reject(request.user)
+            with transaction.atomic():
+                req.reject(request.user)
             count += 1
         self.message_user(request, f'{count} request(s) rejected.')
     reject_requests.short_description = 'Reject selected requests'

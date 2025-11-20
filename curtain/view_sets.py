@@ -1006,15 +1006,17 @@ class PermanentLinkRequestViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        permanent_request.approve(request.user)
+        with transaction.atomic():
+            permanent_request.approve(request.user)
 
         if permanent_request.request_type == 'permanent':
             message = "Request approved and curtain made permanent"
         else:
             message = f"Request approved and expiry duration extended to {permanent_request.requested_expiry_months} months"
 
+        serializer = self.get_serializer(permanent_request)
         return Response(
-            data={"message": message},
+            data={"message": message, "request": serializer.data},
             status=status.HTTP_200_OK
         )
 
@@ -1032,9 +1034,11 @@ class PermanentLinkRequestViewSet(viewsets.ModelViewSet):
             )
 
         admin_notes = request.data.get('admin_notes', None)
-        permanent_request.reject(request.user, admin_notes)
+        with transaction.atomic():
+            permanent_request.reject(request.user, admin_notes)
 
+        serializer = self.get_serializer(permanent_request)
         return Response(
-            data={"message": "Request rejected"},
+            data={"message": "Request rejected", "request": serializer.data},
             status=status.HTTP_200_OK
         )

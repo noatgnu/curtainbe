@@ -352,12 +352,13 @@ class PermanentLinkRequest(models.Model):
         self.reviewed_at = timezone.now()
         self.save()
 
+        curtain = Curtain.objects.get(id=self.curtain.id)
         if self.request_type == 'permanent':
-            self.curtain.permanent = True
-            self.curtain.save()
+            curtain.permanent = True
+            curtain.save(update_fields=['permanent'])
         elif self.request_type == 'extend' and self.requested_expiry_months:
-            self.curtain.expiry_duration = timedelta(days=self.requested_expiry_months * 30)
-            self.curtain.save()
+            curtain.expiry_duration = timedelta(days=self.requested_expiry_months * 30)
+            curtain.save(update_fields=['expiry_duration'])
 
     def reject(self, admin_user, notes=None):
         """
