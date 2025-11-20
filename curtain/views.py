@@ -9,10 +9,12 @@ from channels.layers import get_channel_layer
 from django.db.models import Count
 from django.db.models.functions import TruncDay, TruncWeek
 from django.http import FileResponse, Http404
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.response import Response
 from rq.job import Job
 from scipy.stats import ttest_ind
@@ -129,10 +131,17 @@ class ORCIDOAUTHView(APIView):
                             user.extraproperties.social_platform = social
                             user.extraproperties.save()
                     # create a refresh token for the user
+                    remember_me = self.request.data.get("remember_me", False)
                     refresh_token = RefreshToken.for_user(user)
-                    #user.is_authenticated = True
-                    #user.save()
-                    return Response(data={"refresh": str(refresh_token), "access": str(refresh_token.access_token)})
+
+                    if remember_me:
+                        refresh_token.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS))
+                        access_token = refresh_token.access_token
+                        access_token.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS))
+                    else:
+                        access_token = refresh_token.access_token
+
+                    return Response(data={"refresh": str(refresh_token), "access": str(access_token)})
                 else:
                     # create a new user with the ORCID ID as the username
                     user = User.objects.create_user(username=data["orcid"],
@@ -149,11 +158,52 @@ class ORCIDOAUTHView(APIView):
                     ex.social_platform = social
                     ex.save()
                     # create a refresh token for the user
+                    remember_me = self.request.data.get("remember_me", False)
                     refresh_token = RefreshToken.for_user(user)
-                    return Response(data={"refresh": str(refresh_token), "access": str(refresh_token.access_token)})
+
+                    if remember_me:
+                        refresh_token.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS))
+                        access_token = refresh_token.access_token
+                        access_token.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS))
+                    else:
+                        access_token = refresh_token.access_token
+
+                    return Response(data={"refresh": str(refresh_token), "access": str(access_token)})
             except:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Custom serializer to handle 'remember_me' parameter.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['remember_me'] = serializers.BooleanField(default=False, required=False)
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        remember_me = attrs.get('remember_me', False)
+
+        if remember_me:
+            refresh = self.get_token(self.user)
+            refresh.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS))
+            access = refresh.access_token
+            access.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS))
+
+            data['refresh'] = str(refresh)
+            data['access'] = str(access)
+
+        return data
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom token view that supports 'remember_me' parameter.
+    """
+    serializer_class = CustomTokenObtainPairSerializer
+
 
 # Get general site properties
 class SitePropertiesView(APIView):
@@ -167,7 +217,11 @@ class SitePropertiesView(APIView):
             "non_user_post": settings.CURTAIN_ALLOW_NON_USER_POST,
             "allow_user_set_permanent": settings.CURTAIN_ALLOW_USER_SET_PERMANENT,
             "expiry_duration_options": [3, 6],
-            "default_expiry_duration_months": 3
+            "default_expiry_duration_months": 3,
+            "jwt_access_token_lifetime_minutes": settings.JWT_ACCESS_TOKEN_LIFETIME_MINUTES,
+            "jwt_refresh_token_lifetime_days": settings.JWT_REFRESH_TOKEN_LIFETIME_DAYS,
+            "jwt_remember_me_access_token_lifetime_days": settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS,
+            "jwt_remember_me_refresh_token_lifetime_days": settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS
         })
 
 # Kinase Library Proxy view for getting kinase scores

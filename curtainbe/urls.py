@@ -24,7 +24,7 @@ from curtain.view_sets import UserViewSet, KinaseLibraryViewSet, DataFilterListV
     UserAPIKeyViewSets, UserPublicKeyViewSets, DataCiteViewSets, AnnouncementViewSet, PermanentLinkRequestViewSet
 from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHView, KinaseLibraryProxyView, \
     DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView, \
-    APIKeyView, DataCiteFileView
+    APIKeyView, DataCiteFileView, CustomTokenObtainPairView
 from curtain.chunked_upload import CurtainChunkedUploadView
 from django.contrib import admin
 
@@ -40,7 +40,7 @@ router.register(r'permanent-link-requests', PermanentLinkRequestViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('logout/', LogoutView.as_view(), name='auth_logout'),

@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -410,3 +411,19 @@ DRF_CHUNKED_UPLOAD_USER_RESTRICTED = True
 DRF_CHUNKED_UPLOAD_COMPLETE_EXT = ".done"
 DRF_CHUNKED_UPLOAD_INCOMPLETE_EXT = ".part"
 DRF_CHUNKED_UPLOAD_CHECKSUM = "sha256"
+
+JWT_ACCESS_TOKEN_LIFETIME_MINUTES = int(os.environ.get("JWT_ACCESS_TOKEN_LIFETIME_MINUTES", "60"))
+JWT_REFRESH_TOKEN_LIFETIME_DAYS = int(os.environ.get("JWT_REFRESH_TOKEN_LIFETIME_DAYS", "1"))
+JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS = int(os.environ.get("JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS", "30"))
+JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS = int(os.environ.get("JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS", "90"))
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=JWT_ACCESS_TOKEN_LIFETIME_MINUTES),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=JWT_REFRESH_TOKEN_LIFETIME_DAYS),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
