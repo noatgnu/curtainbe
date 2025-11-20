@@ -45,6 +45,7 @@ djangorestframework-api-key==3.1.0 ; python_version >= "3.10" and python_version
 djangorestframework-simplejwt==5.5.1 ; python_version >= "3.10" and python_version < "3.13"
 djangorestframework==3.16.1 ; python_version >= "3.10" and python_version < "3.13"
 docutils==0.21.2 ; python_version >= "3.10" and python_version < "3.13"
+drf-chunked-upload==0.6.0 ; python_version >= "3.10" and python_version < "3.13"
 drf-flex-fields==1.0.2 ; python_version >= "3.10" and python_version < "3.13"
 drf-url-filters==0.5.1 ; python_version >= "3.10" and python_version < "3.13"
 exceptiongroup==1.3.0 ; python_version == "3.10"

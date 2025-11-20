@@ -1,93 +1,60 @@
 # Curtain Backend
 
-This project is the backend for Curtain. It includes models for managing curtains, user public keys, social platforms, data filter lists, kinase library models, curtain access tokens, AES encryption factors, data hashes, and last access timestamps.
+This is the backend for the Curtain application, a Django-based platform for sharing and managing scientific data.
 
-## Setup
+## Overview
 
-You can set up and run this project using Docker Compose directly or the provided Ansible playbook.
+The Curtain backend provides a RESTful API for managing "Curtains", which are shared datasets or files. The platform includes features for user authentication, data encryption, and integration with the DataCite service for creating Digital Object Identifiers (DOIs) for datasets.
 
-### Using Docker Compose
+## Main Features
 
-1. **Clone the repository**:
-    ```sh
-    git clone https://github.com/noatgnu/curtainbe.git
-    cd curtainbe
+*   **Curtain Management**: Create, update, and delete Curtains. Each Curtain can have multiple owners and can be set to expire after a certain period.
+*   **File Sharing**: Upload and download files associated with Curtains. The system supports both cloud and local file storage.
+*   **DataCite Integration**: A complete workflow for registering datasets with DataCite and obtaining a DOI, turning them into citable academic works.
+*   **User Management**: User authentication via email/password or ORCID. Users can manage their own API keys and public keys.
+*   **Encryption**: Support for end-to-end encryption of Curtain data.
+*   **API Access**: The application is primarily API-driven, with support for API key authentication for programmatic access.
+*   **Background Jobs**: Long-running tasks, such as comparing data from multiple Curtains, are handled by background workers using Django-RQ.
+
+## API Endpoints
+
+The API is built using Django Rest Framework. The main endpoints are:
+
+*   `/api/curtain/`: Manages Curtains.
+*   `/api/datacite/`: Manages the DataCite DOI registration process.
+*   `/api/users/`: Manages users.
+*   `/api/keys/`: Manages user API keys.
+*   `/api/public_keys/`: Manages user public keys.
+*   `/api/data_filter_lists/`: Manages user-defined data filters.
+
+## Getting Started
+
+### Prerequisites
+
+*   Python 3.x
+*   Poetry
+*   Django
+
+### Installation
+
+1.  Clone the repository.
+2.  Install the dependencies using Poetry:
+    ```bash
+    poetry install
+    ```
+3.  Set up the database:
+    ```bash
+    python manage.py migrate
+    ```
+4.  Run the development server:
+    ```bash
+    python manage.py runserver
     ```
 
-2. **Create environment variables file**:
-    Create a `.env` file in the project root and add the necessary environment variables.
+### Running with Docker
 
-3. **Build and start Docker containers**:
-    ```sh
-    docker-compose up -d
-    ```
+The project also includes a `docker-compose.public.yml` file for running the application in a containerized environment.
 
-4. **Apply migrations**:
-    ```sh
-    docker-compose exec web python manage.py migrate
-    ```
-
-5. **Create a superuser**:
-    ```sh
-    docker-compose exec web python manage.py createsuperuser
-    ```
-
-6. **Access the application**:
-    Open your browser and go to `http://localhost:8000`.
-
-## Environment Variables
-
-### Required for Production
-
-- `SITE_DOMAIN`: Full domain URL for the site (e.g., `https://yourdomain.com`). This is used for generating public file URLs in DataCite metadata. If not set, the system will use the request Host header.
-- `SECRET_KEY`: Django secret key
-- `POSTGRES_NAME`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: Database credentials
-- `DJANGO_ALLOWED_HOSTS`: Comma-separated list of allowed hosts
-- `DJANGO_CORS_WHITELIST`: Comma-separated list of CORS allowed origins
-
-### Optional
-
-- `STORAGE_BACKEND`: Storage backend (`gcloud` or `s3`). If not set, uses local filesystem.
-- `CURTAIN_DEFAULT_USER_LINK_LIMIT`: Default curtain link limit per user (default: 0)
-- `CURTAIN_ALLOW_NON_USER_POST`: Allow non-authenticated users to post (default: False)
-- `DATACITE_USERNAME`, `DATACITE_PASSWORD`, `DATACITE_PREFIX`: DataCite API credentials
-
-### Using Ansible Playbook
-
-1. **Clone the repository**:
-    ```sh
-    git clone https://github.com/noatgnu/curtainbe.git
-    cd curtainbe
-    ```
-
-2. **Create environment variables file**:
-    Create a `.env` file in the project root and add the necessary environment variables.
-
-3. **Run the Ansible playbook**:
-    ```sh
-    ansible-playbook -i inventory ansible.playbook.yml -e "domain_name=yourdomain.com email=youremail@example.com"
-    ```
-4. **Access the application**:
-    Open your browser and go to `https://yourdomain.com`.
-
-
-## Contributing
-
-1. **Fork the repository**.
-2. **Create a new branch**:
-    ```sh
-    git checkout -b feature/your-feature-name
-    ```
-3. **Commit your changes**:
-    ```sh
-    git commit -m 'Add some feature'
-    ```
-4. **Push to the branch**:
-    ```sh
-    git push origin feature/your-feature-name
-    ```
-5. **Open a pull request**.
-
-## License
-
-This project is licensed under the MIT License.
+```bash
+docker-compose -f docker-compose.public.yml up
+```

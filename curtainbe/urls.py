@@ -21,10 +21,11 @@ from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from curtain.view_sets import UserViewSet, KinaseLibraryViewSet, DataFilterListViewSet, CurtainViewSet, \
-    UserAPIKeyViewSets, UserPublicKeyViewSets, DataCiteViewSets
+    UserAPIKeyViewSets, UserPublicKeyViewSets, DataCiteViewSets, AnnouncementViewSet, PermanentLinkRequestViewSet
 from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHView, KinaseLibraryProxyView, \
     DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView, \
     APIKeyView, DataCiteFileView
+from curtain.chunked_upload import CurtainChunkedUploadView
 from django.contrib import admin
 
 router = routers.DefaultRouter()
@@ -34,6 +35,8 @@ router.register(r'data_filter_list', DataFilterListViewSet)
 router.register(r'curtain', CurtainViewSet)
 router.register(r'api_key', UserAPIKeyViewSets)
 router.register(r'datacite', DataCiteViewSets)
+router.register(r'announcements', AnnouncementViewSet)
+router.register(r'permanent-link-requests', PermanentLinkRequestViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -52,6 +55,8 @@ urlpatterns = [
     path('stats/summary/<int:last_n_days>/', StatsView.as_view(), name="stats_summary"),
     path(r'job/<str:job_id>/', JobResultView.as_view(), name='job_result'),
     path('datacite/file/<int:datacite_id>/', DataCiteFileView.as_view(), name='datacite_file'),
+    path('curtain-chunked-upload/', CurtainChunkedUploadView.as_view(), name='curtain_chunked_upload'),
+    path('curtain-chunked-upload/<uuid:pk>/', CurtainChunkedUploadView.as_view(), name='curtain_chunked_upload_detail'),
     path('admin/', admin.site.urls),
 ]
 

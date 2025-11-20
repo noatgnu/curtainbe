@@ -50,7 +50,8 @@ INSTALLED_APPS = [
     'storages',
     'request',
     'django_rq',
-    'django_extensions'
+    'django_extensions',
+    'drf_chunked_upload'
 ]
 
 MIDDLEWARE = [
@@ -401,3 +402,11 @@ GLOBUS_CLIENT_ID = os.environ.get("GLOBUS_CLIENT_ID", "")
 GLOBUS_REFRESH_TOKEN = os.environ.get("GLOBUS_REFRESH_TOKEN", "")
 
 SITE_DOMAIN = os.environ.get("SITE_DOMAIN", "")
+
+DRF_CHUNKED_UPLOAD_PATH = "chunked_uploads"
+DRF_CHUNKED_UPLOAD_ABSTRACT_MODEL = False
+DRF_CHUNKED_UPLOAD_MAX_BYTES = 1024 * 1024 * 1024 * 2
+DRF_CHUNKED_UPLOAD_USER_RESTRICTED = True
+DRF_CHUNKED_UPLOAD_COMPLETE_EXT = ".done"
+DRF_CHUNKED_UPLOAD_INCOMPLETE_EXT = ".part"
+DRF_CHUNKED_UPLOAD_CHECKSUM = "sha256"

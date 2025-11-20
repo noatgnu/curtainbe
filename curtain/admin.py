@@ -16,7 +16,7 @@ from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, Co
 from .models import (
     DataCite, Curtain, DataFilterList, ExtraProperties, UserAPIKey, UserPublicKey,
     SocialPlatform, KinaseLibraryModel, CurtainAccessToken, DataAESEncryptionFactors,
-    DataHash, LastAccess
+    DataHash, LastAccess, Announcement, PermanentLinkRequest
 )
 from django.conf import settings
 
@@ -516,4 +516,152 @@ class DataCiteAdmin(admin.ModelAdmin):
     approve_datacite.short_description = "Approve selected DataCite(s)"
 
 admin.site.register(DataCite, DataCiteAdmin)
+
+
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    list_display = ('title', 'announcement_type_badge', 'priority_badge', 'is_active', 'is_visible_status', 'starts_at', 'expires_at', 'show_on_login', 'created')
+    list_filter = ('announcement_type', 'priority', 'is_active', 'show_on_login', 'dismissible')
+    search_fields = ('title', 'content')
+    readonly_fields = ('created', 'updated', 'created_by', 'is_visible_status')
+    ordering = ('-priority', '-created')
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('title', 'content', 'announcement_type', 'priority')
+        }),
+        ('Visibility Settings', {
+            'fields': ('is_active', 'show_on_login', 'dismissible', 'starts_at', 'expires_at')
+        }),
+        ('Metadata', {
+            'fields': ('created', 'updated', 'created_by'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def announcement_type_badge(self, obj):
+        colors = {
+            'info': '#3498db',
+            'warning': '#f39c12',
+            'success': '#2ecc71',
+            'error': '#e74c3c',
+            'maintenance': '#9b59b6'
+        }
+        color = colors.get(obj.announcement_type, '#95a5a6')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            color,
+            obj.get_announcement_type_display()
+        )
+    announcement_type_badge.short_description = 'Type'
+
+    def priority_badge(self, obj):
+        colors = {
+            'low': '#95a5a6',
+            'medium': '#3498db',
+            'high': '#f39c12',
+            'critical': '#e74c3c'
+        }
+        color = colors.get(obj.priority, '#95a5a6')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px; font-weight: bold;">{}</span>',
+            color,
+            obj.get_priority_display()
+        )
+    priority_badge.short_description = 'Priority'
+
+    def is_visible_status(self, obj):
+        if obj.is_visible:
+            return format_html('<span style="color: green; font-weight: bold;">✓ Visible</span>')
+        return format_html('<span style="color: red; font-weight: bold;">✗ Not Visible</span>')
+    is_visible_status.short_description = 'Visibility'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+
+@admin.register(PermanentLinkRequest)
+class PermanentLinkRequestAdmin(admin.ModelAdmin):
+    list_display = ('id', 'curtain_link', 'requested_by', 'request_type_badge', 'requested_expiry_months', 'status_badge', 'requested_at', 'reviewed_at', 'reviewed_by')
+    list_filter = ('status', 'request_type', 'requested_at', 'reviewed_at')
+    search_fields = ('curtain__link_id', 'requested_by__username', 'reviewed_by__username', 'reason', 'admin_notes')
+    readonly_fields = ('requested_at', 'reviewed_at', 'curtain_link', 'requested_by_username')
+    ordering = ('-requested_at',)
+    actions = ['approve_requests', 'reject_requests']
+
+    fieldsets = (
+        ('Request Information', {
+            'fields': ('curtain', 'curtain_link', 'requested_by', 'requested_by_username', 'request_type', 'requested_expiry_months', 'reason', 'requested_at')
+        }),
+        ('Review Information', {
+            'fields': ('status', 'reviewed_by', 'reviewed_at', 'admin_notes')
+        }),
+    )
+
+    def curtain_link(self, obj):
+        if obj.curtain:
+            return format_html(
+                '<a href="{}" target="_blank">{}</a>',
+                reverse('admin:curtain_curtain_change', args=[obj.curtain.id]),
+                obj.curtain.link_id
+            )
+        return '-'
+    curtain_link.short_description = 'Curtain'
+
+    def requested_by_username(self, obj):
+        return obj.requested_by.username
+    requested_by_username.short_description = 'Requested By'
+
+    def request_type_badge(self, obj):
+        colors = {
+            'permanent': '#9b59b6',
+            'extend': '#3498db'
+        }
+        color = colors.get(obj.request_type, '#95a5a6')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px;">{}</span>',
+            color,
+            obj.get_request_type_display()
+        )
+    request_type_badge.short_description = 'Request Type'
+
+    def status_badge(self, obj):
+        colors = {
+            'pending': '#f39c12',
+            'approved': '#2ecc71',
+            'rejected': '#e74c3c'
+        }
+        color = colors.get(obj.status, '#95a5a6')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 3px 10px; border-radius: 3px; font-weight: bold;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+
+    def approve_requests(self, request, queryset):
+        """
+        Admin action to approve selected permanent link requests.
+        """
+        pending_requests = queryset.filter(status='pending')
+        count = 0
+        for req in pending_requests:
+            req.approve(request.user)
+            count += 1
+        self.message_user(request, f'{count} request(s) approved.')
+    approve_requests.short_description = 'Approve selected requests'
+
+    def reject_requests(self, request, queryset):
+        """
+        Admin action to reject selected permanent link requests.
+        """
+        pending_requests = queryset.filter(status='pending')
+        count = 0
+        for req in pending_requests:
+            req.reject(request.user)
+            count += 1
+        self.message_user(request, f'{count} request(s) rejected.')
+    reject_requests.short_description = 'Reject selected requests'
 

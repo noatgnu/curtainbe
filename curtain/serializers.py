@@ -6,7 +6,7 @@ from rest_framework import serializers
 from django.urls import reverse
 
 from curtain.models import Curtain, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
-    DataAESEncryptionFactors, DataHash, LastAccess, DataCite
+    DataAESEncryptionFactors, DataHash, LastAccess, DataCite, Announcement, PermanentLinkRequest
 from curtainbe import settings
 from django.contrib.auth.models import User
 
@@ -146,3 +146,47 @@ class DataCiteSerializer(serializers.ModelSerializer):
     class Meta:
         model = DataCite
         fields = ["id", "updated", "created", "curtain", "curtain_type", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock", "local_file", "public_file_url"]
+
+
+class AnnouncementSerializer(serializers.ModelSerializer):
+    is_visible = serializers.SerializerMethodField()
+    created_by_username = serializers.SerializerMethodField()
+
+    def get_is_visible(self, announcement):
+        return announcement.is_visible
+
+    def get_created_by_username(self, announcement):
+        if announcement.created_by:
+            return announcement.created_by.username
+        return None
+
+    class Meta:
+        model = Announcement
+        fields = ["id", "title", "content", "announcement_type", "priority", "is_active", "created", "updated",
+                  "starts_at", "expires_at", "created_by_username", "show_on_login", "dismissible", "is_visible"]
+        read_only_fields = ["id", "created", "updated", "is_visible", "created_by_username"]
+
+
+class PermanentLinkRequestSerializer(serializers.ModelSerializer):
+    curtain_link_id = serializers.SerializerMethodField()
+    requested_by_username = serializers.SerializerMethodField()
+    reviewed_by_username = serializers.SerializerMethodField()
+
+    def get_curtain_link_id(self, request):
+        return request.curtain.link_id
+
+    def get_requested_by_username(self, request):
+        return request.requested_by.username
+
+    def get_reviewed_by_username(self, request):
+        if request.reviewed_by:
+            return request.reviewed_by.username
+        return None
+
+    class Meta:
+        model = PermanentLinkRequest
+        fields = ["id", "curtain", "curtain_link_id", "requested_by", "requested_by_username", "request_type",
+                  "requested_expiry_months", "status", "reason", "requested_at", "reviewed_at", "reviewed_by",
+                  "reviewed_by_username", "admin_notes"]
+        read_only_fields = ["id", "requested_by", "requested_at", "reviewed_at", "reviewed_by", "curtain_link_id",
+                            "requested_by_username", "reviewed_by_username"]

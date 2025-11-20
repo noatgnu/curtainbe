@@ -248,3 +248,125 @@ class LastAccess(models.Model):
     curtain = models.ForeignKey(Curtain, on_delete=models.CASCADE, related_name="last_access")
     last_access = models.DateTimeField(auto_now=True)
 
+
+class Announcement(models.Model):
+    """
+    This model represents system announcements that can be displayed to users.
+    """
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+
+    ANNOUNCEMENT_TYPE_CHOICES = [
+        ('info', 'Information'),
+        ('warning', 'Warning'),
+        ('success', 'Success'),
+        ('error', 'Error'),
+        ('maintenance', 'Maintenance'),
+    ]
+
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    announcement_type = models.CharField(max_length=20, choices=ANNOUNCEMENT_TYPE_CHOICES, default='info')
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+    is_active = models.BooleanField(default=True)
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+    starts_at = models.DateTimeField(null=True, blank=True, help_text="When to start showing this announcement")
+    expires_at = models.DateTimeField(null=True, blank=True, help_text="When to stop showing this announcement")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="announcements")
+    show_on_login = models.BooleanField(default=False, help_text="Show this announcement on login page")
+    dismissible = models.BooleanField(default=True, help_text="Can users dismiss this announcement")
+
+    class Meta:
+        ordering = ['-priority', '-created']
+
+    def __str__(self):
+        return f"{self.title} ({self.announcement_type} - {self.priority})"
+
+    @property
+    def is_visible(self):
+        """
+        Check if announcement should be visible based on is_active and date range.
+        """
+        if not self.is_active:
+            return False
+
+        now = timezone.now()
+
+        if self.starts_at and now < self.starts_at:
+            return False
+
+        if self.expires_at and now > self.expires_at:
+            return False
+
+        return True
+
+
+class PermanentLinkRequest(models.Model):
+    """
+    This model represents a request from a user to make their curtain session permanent
+    or extend the expiry duration.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    REQUEST_TYPE_CHOICES = [
+        ('permanent', 'Make Permanent'),
+        ('extend', 'Extend Expiry Duration'),
+    ]
+
+    curtain = models.ForeignKey(Curtain, on_delete=models.CASCADE, related_name="permanent_requests")
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="permanent_link_requests")
+    request_type = models.CharField(max_length=10, choices=REQUEST_TYPE_CHOICES, default='permanent', help_text="Type of request: permanent or extend")
+    requested_expiry_months = models.IntegerField(null=True, blank=True, help_text="Requested expiry duration in months (for extend requests)")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    reason = models.TextField(blank=True, null=True, help_text="User's reason for requesting permanent link or extension")
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_permanent_requests")
+    admin_notes = models.TextField(blank=True, null=True, help_text="Admin's notes on the request")
+
+    class Meta:
+        ordering = ['-requested_at']
+        unique_together = ['curtain', 'requested_by', 'status']
+
+    def __str__(self):
+        if self.request_type == 'permanent':
+            return f"Permanent link request for {self.curtain.link_id} by {self.requested_by.username} - {self.status}"
+        else:
+            return f"Expiry extension request ({self.requested_expiry_months} months) for {self.curtain.link_id} by {self.requested_by.username} - {self.status}"
+
+    def approve(self, admin_user):
+        """
+        Approve the request and make the curtain permanent or extend expiry duration.
+        """
+        self.status = 'approved'
+        self.reviewed_by = admin_user
+        self.reviewed_at = timezone.now()
+        self.save()
+
+        if self.request_type == 'permanent':
+            self.curtain.permanent = True
+            self.curtain.save()
+        elif self.request_type == 'extend' and self.requested_expiry_months:
+            self.curtain.expiry_duration = timedelta(days=self.requested_expiry_months * 30)
+            self.curtain.save()
+
+    def reject(self, admin_user, notes=None):
+        """
+        Reject the request.
+        """
+        self.status = 'rejected'
+        self.reviewed_by = admin_user
+        self.reviewed_at = timezone.now()
+        if notes:
+            self.admin_notes = notes
+        self.save()
+

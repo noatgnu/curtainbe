@@ -38,12 +38,12 @@ from django.db import transaction
 import io
 
 from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
-    DataAESEncryptionFactors, LastAccess, DataCite
+    DataAESEncryptionFactors, LastAccess, DataCite, Announcement, PermanentLinkRequest
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
     IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey
 from curtain.pydantic_models import DataCiteForm
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
-    UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer
+    UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer, AnnouncementSerializer, PermanentLinkRequestSerializer
 from curtain.utils import is_user_staff, delete_file_related_objects, calculate_boxplot_parameters, \
     check_nan_return_none, get_uniprot_data, encrypt_data
 from curtain.validations import curtain_query_schema, kinase_library_query_schema, data_filter_list_query_schema
@@ -52,6 +52,9 @@ import kinase_library as kl
 
 
 class UserViewSet(FlexFieldsMixin, FiltersMixin, viewsets.ModelViewSet):
+    """
+    A viewset for viewing and editing user instances.
+    """
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = (permissions.IsAuthenticated,)
@@ -66,6 +69,11 @@ class UserViewSet(FlexFieldsMixin, FiltersMixin, viewsets.ModelViewSet):
 
 
 class DataFilterListViewSet(FiltersMixin, viewsets.ModelViewSet):
+    """
+    A viewset for viewing and editing data filter lists.
+    Users can create, delete, and list their own filters.
+    Default filters are also available.
+    """
     queryset = DataFilterList.objects.all()
     serializer_class = DataFilterListSerializer
     filter_backends = [filters.OrderingFilter]
@@ -119,6 +127,9 @@ class DataFilterListViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.AllowAny])
     def get_all_category(self, request, *args, **kwargs):
+        """
+        Returns a list of all distinct data filter list categories.
+        """
         categories = DataFilterList.objects.values("category").distinct()
         # results = [i["category"] for i in categories if i["category"] != ""]
         results = [i["category"] for i in categories if i["category"] != ""]
@@ -126,6 +137,10 @@ class DataFilterListViewSet(FiltersMixin, viewsets.ModelViewSet):
 
 
 class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
+    """
+    A viewset for viewing and editing Curtains.
+    This is the main viewset of the application and handles the creation, download, and management of Curtains.
+    """
     queryset = Curtain.objects.all()
     serializer_class = CurtainSerializer
     filter_backends = [filters.OrderingFilter]
@@ -170,6 +185,11 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
     ])
     @method_decorator(cache_page(0))
     def download(self, request, pk=None, link_id=None, token=None):
+        """
+        Downloads the file associated with a Curtain.
+        If the storage backend is cloud-based (S3, GCloud), it returns a signed URL.
+        If the storage is local, it returns the file content directly.
+        """
 
         c = self.get_object()
         # return sendfile(request, c.file.url)
@@ -196,6 +216,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=True, permission_classes=[permissions.IsAdminUser | IsCurtainOwner])
     def generate_token(self, request, pk=None, link_id=None):
+        """
+        Generates a time-limited access token for a Curtain.
+        """
         c = self.get_object()
         a = AccessToken()
         a.set_exp(lifetime=timedelta(days=self.request.data["lifetime"]))
@@ -234,6 +257,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
     def get_encryption_factors(self, request, **kwargs):
+        """
+        Returns the encryption factors (key and IV) for an end-to-end encrypted Curtain.
+        """
         c: Curtain = self.get_object()
         if c.encrypted:
             factors = c.encryption_factors.all()[0]
@@ -242,6 +268,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
     def set_encryption_factors(self, request, **kwargs):
+        """
+        Sets the encryption factors (key and IV) for an end-to-end encrypted Curtain.
+        """
         c: Curtain = self.get_object()
         if c.encrypted:
             factors = DataAESEncryptionFactors(encrypted_iv=request.data["encryption_iv"], encrypted_decryption_key=request.data["encryption_key"], curtain=c)
@@ -298,6 +327,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def create_encrypted(self, request, **kwargs):
+        """
+        A dedicated endpoint for creating an encrypted Curtain.
+        """
         c = Curtain()
         c.file.save(str(c.link_id) + ".json", djangoFile(self.request.data["file"]))
         if "description" in self.request.data:
@@ -341,6 +373,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=False, permission_classes=[HasAPIKey])
     def api_create(self, request, **kwargs):
+        """
+        Creates a new Curtain using an API key.
+        """
         if "HTTP_AUTHORIZATION" in request.META:
             try:
                 key = request.META["HTTP_AUTHORIZATION"].split()[1]
@@ -358,6 +393,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=False, permission_classes=[HasAPIKey])
     def api_create_encrypted(self, request, **kwargs):
+        """
+        Creates a new encrypted Curtain using an API key.
+        """
         if "HTTP_AUTHORIZATION" in request.META:
             try:
                 key = request.META["HTTP_AUTHORIZATION"].split()[1]
@@ -375,6 +413,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["patch"], detail=True, permission_classes=[permissions.IsAdminUser | IsCurtainOwner])
     def api_update(self, request, **kwargs):
+        """
+        Updates a Curtain using an API key.
+        """
         if "HTTP_AUTHORIZATION" in request.META:
             try:
                 key = request.META["HTTP_AUTHORIZATION"].split()[1]
@@ -431,6 +472,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         permissions.IsAdminUser | IsCurtainOwner
     ])
     def get_ownership(self, request, pk=None, link_id=None):
+        """
+        Checks if the current user is an owner of the Curtain.
+        """
         c = self.get_object()
         if self.request.user in c.owners.all():
             return Response(data={"link_id": c.link_id, "ownership": True})
@@ -440,6 +484,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         permissions.IsAdminUser | HasCurtainToken | IsCurtainOwner
     ])
     def get_owners(self, request, pk=None, link_id=None):
+        """
+        Returns a list of all owners of the Curtain.
+        """
         c = self.get_object()
         owners = []
         for i in c.owners.all():
@@ -450,6 +497,10 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         permissions.IsAdminUser | IsCurtainOwner
     ])
     def add_owner(self, request, pk=None, link_id=None):
+        """
+        Adds a new owner to the Curtain.
+        If the user does not exist, a new user is created.
+        """
         c = self.get_object()
         if "username" in self.request.data:
             user = User.objects.filter(username=self.request.data["username"]).first()
@@ -470,6 +521,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_curtain_list(self, request, pk=None, link_id=None):
+        """
+        Returns a list of all Curtains owned by the current user.
+        """
         cs = self.request.user.curtain.all()
         cs_json = CurtainSerializer(cs, many=True, context={"request": request})
         return Response(data=cs_json.data)
@@ -488,6 +542,9 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
 
 
 class KinaseLibraryViewSet(FiltersMixin, viewsets.ModelViewSet):
+    """
+    A viewset for viewing and editing kinase library data.
+    """
     queryset = KinaseLibraryModel.objects.all()
     serializer_class = KinaseLibrarySerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, ]
@@ -533,6 +590,10 @@ def update_section(section, data_array, model):
 
 
 class UserPublicKeyViewSets(viewsets.ModelViewSet):
+    """
+    A viewset for managing user public keys.
+    Authenticated users can manage their own public keys.
+    """
     queryset = UserPublicKey.objects.all()
     serializer_class = UserPublicKeySerializer
     permission_classes = [permissions.IsAuthenticated, ]
@@ -562,6 +623,10 @@ class UserPublicKeyViewSets(viewsets.ModelViewSet):
 
 
 class UserAPIKeyViewSets(viewsets.ModelViewSet):
+    """
+    A viewset for managing user API keys.
+    Authenticated users can manage their own API keys.
+    """
     queryset = UserAPIKey.objects.all()
     serializer_class = UserAPIKeySerializer
     permission_classes = [permissions.IsAuthenticated, ]
@@ -592,6 +657,10 @@ class UserAPIKeyViewSets(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class DataCiteViewSets(viewsets.ModelViewSet):
+    """
+    A viewset for managing DataCite DOI registration.
+    This viewset handles the entire workflow of creating and managing DOIs for Curtains.
+    """
     queryset = DataCite.objects.all()
     serializer_class = DataCiteSerializer
     permission_classes = [permissions.IsAuthenticated, ]
@@ -726,6 +795,10 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=True, permission_classes=[permissions.IsAuthenticated])
     def change_status(self, request, pk=None):
+        """
+        Changes the status of a DataCite entry (e.g., from "draft" to "published").
+        This action is restricted to staff users.
+        """
         data_cite = self.get_object()
         if not request.user.is_staff:
             return Response(status=status.HTTP_401_UNAUTHORIZED)
@@ -748,6 +821,10 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     @action(methods=["post"], detail=True, permission_classes=[permissions.IsAuthenticated])
     def lock(self, request, pk=None):
+        """
+        Locks or unlocks a DataCite entry to prevent or allow editing.
+        This action is restricted to staff users.
+        """
         data_cite = self.get_object()
         if data_cite.lock:
             if request.user.is_staff:
@@ -760,6 +837,9 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_random_suffix(self, request, *args, **kwargs):
+        """
+        Retrieves a random DOI suffix from the DataCite API to ensure uniqueness.
+        """
         datacite_url = f"{settings.DATACITE_API_URL}/dois/random?prefix={settings.DATACITE_PREFIX}"
         response = requests.get(datacite_url)
         if response.status_code == 200:
@@ -771,6 +851,9 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_time_limited_permission_token(self, request, *args, **kwargs):
+        """
+        Generates a time-limited token that can be used to authorize certain actions.
+        """
         suffix = self.request.query_params.get("suffix", None)
         if suffix is None:
             return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -780,6 +863,9 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def proxy_orcid(self, request, *args, **kwargs):
+        """
+        A proxy to the ORCID API to retrieve public records.
+        """
         orcid = self.request.query_params.get("orcid", None)
         if orcid is None:
             return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -792,5 +878,163 @@ class DataCiteViewSets(viewsets.ModelViewSet):
 
     @action(methods=["get"], detail=False, permission_classes=[permissions.IsAuthenticated])
     def get_quota(self, request, *args, **kwargs):
+        """
+        Returns the remaining DOI creation quota for the current user for the day.
+        """
         user_datacite_count_today = DataCite.objects.filter(user=self.request.user, created__date=timezone.now().date()).count()
         return Response(data={"quota": settings.DATACITE_MAX_DOI_PER_DAY_PER_USER - user_datacite_count_today, "max_quota": settings.DATACITE_MAX_DOI_PER_DAY_PER_USER})
+
+
+class AnnouncementViewSet(viewsets.ModelViewSet):
+    """
+    A viewset for viewing announcements.
+    Public read-only access for active announcements.
+    Staff-only write access.
+    """
+    queryset = Announcement.objects.all()
+    serializer_class = AnnouncementSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ("id", "created", "priority")
+    ordering = ("-priority", "-created")
+
+    def get_queryset(self):
+        queryset = self.queryset
+
+        if self.request.user.is_staff:
+            return queryset
+
+        queryset = queryset.filter(is_active=True)
+
+        now = timezone.now()
+        queryset = queryset.filter(
+            Q(starts_at__isnull=True) | Q(starts_at__lte=now)
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gte=now)
+        )
+
+        return queryset
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAdminUser()]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class PermanentLinkRequestViewSet(viewsets.ModelViewSet):
+    """
+    A viewset for managing permanent link requests.
+    Users can request their curtain sessions to be made permanent.
+    Staff can approve or reject requests.
+    """
+    queryset = PermanentLinkRequest.objects.all()
+    serializer_class = PermanentLinkRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ("id", "requested_at", "status")
+    ordering = ("-requested_at",)
+
+    def get_queryset(self):
+        queryset = self.queryset
+
+        if self.request.user.is_staff:
+            return queryset
+
+        return queryset.filter(requested_by=self.request.user)
+
+    def get_permissions(self):
+        if self.action in ['create', 'list', 'retrieve']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAdminUser()]
+
+    def perform_create(self, serializer):
+        curtain = serializer.validated_data.get('curtain')
+        request_type = serializer.validated_data.get('request_type', 'permanent')
+        requested_expiry_months = serializer.validated_data.get('requested_expiry_months')
+
+        if request_type == 'permanent' and curtain.permanent:
+            return Response(
+                data={"error": "This curtain is already permanent"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if request_type == 'extend' and not requested_expiry_months:
+            return Response(
+                data={"error": "requested_expiry_months is required for extend request type"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if request_type == 'extend' and requested_expiry_months <= 0:
+            return Response(
+                data={"error": "requested_expiry_months must be greater than 0"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not curtain.owners.filter(id=self.request.user.id).exists():
+            return Response(
+                data={"error": "You must be an owner of this curtain to request permanent status or expiry extension"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        existing_pending = PermanentLinkRequest.objects.filter(
+            curtain=curtain,
+            requested_by=self.request.user,
+            status='pending'
+        ).exists()
+
+        if existing_pending:
+            return Response(
+                data={"error": "You already have a pending request for this curtain"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer.save(requested_by=self.request.user)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def approve(self, request, pk=None):
+        """
+        Approve a permanent link request or expiry extension request.
+        """
+        permanent_request = self.get_object()
+
+        if permanent_request.status != 'pending':
+            return Response(
+                data={"error": "This request has already been reviewed"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        permanent_request.approve(request.user)
+
+        if permanent_request.request_type == 'permanent':
+            message = "Request approved and curtain made permanent"
+        else:
+            message = f"Request approved and expiry duration extended to {permanent_request.requested_expiry_months} months"
+
+        return Response(
+            data={"message": message},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAdminUser])
+    def reject(self, request, pk=None):
+        """
+        Reject a permanent link request.
+        """
+        permanent_request = self.get_object()
+
+        if permanent_request.status != 'pending':
+            return Response(
+                data={"error": "This request has already been reviewed"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        admin_notes = request.data.get('admin_notes', None)
+        permanent_request.reject(request.user, admin_notes)
+
+        return Response(
+            data={"message": "Request rejected"},
+            status=status.HTTP_200_OK
+        )

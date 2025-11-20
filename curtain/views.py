@@ -25,6 +25,9 @@ from curtain.worker_tasks import compare_session
 import kinase_library as kl
 
 class LogoutView(APIView):
+    """
+    View to handle user logout by blacklisting the refresh token.
+    """
     permission_classes = (IsAuthenticated,)
     # only access this view if user is authenticated
 
@@ -41,6 +44,9 @@ class LogoutView(APIView):
 
 # View to get user information
 class UserView(APIView):
+    """
+    View to get information about the currently authenticated user.
+    """
     permission_classes = (IsAuthenticated,)
     # only access this view if user is authenticated
 
@@ -81,6 +87,10 @@ class UserView(APIView):
 
 # View for handling ORCID OAuth
 class ORCIDOAUTHView(APIView):
+    """
+    View to handle the OAuth2 flow for ORCID authentication.
+    It exchanges an authorization code for an access token and creates or logs in a user.
+    """
     permission_classes = (AllowAny,)
     # user can post to this view without being authenticated
     # this view will handle the OAuth process
@@ -147,6 +157,9 @@ class ORCIDOAUTHView(APIView):
 
 # Get general site properties
 class SitePropertiesView(APIView):
+    """
+    View to return general site-wide settings and properties.
+    """
     permission_classes = (AllowAny,)
 
     def get(self, request, format=None):
@@ -159,6 +172,9 @@ class SitePropertiesView(APIView):
 
 # Kinase Library Proxy view for getting kinase scores
 class KinaseLibraryProxyView(APIView):
+    """
+    A proxy view to the external Kinase Library API for scoring sequences.
+    """
     permission_classes = (AllowAny,)
     # user can get this view without being authenticated
 
@@ -183,6 +199,9 @@ class KinaseLibraryProxyView(APIView):
 
 # View for getting Curtain download stats
 class DownloadStatsView(APIView):
+    """
+    View to get the total number of Curtain downloads.
+    """
     permission_classes = (AllowAny,)
     # user can get this view without being authenticated
 
@@ -195,6 +214,10 @@ class DownloadStatsView(APIView):
         })
 
 class StatsView(APIView):
+    """
+    View to get more detailed statistics about Curtain usage,
+    including downloads and creations per day and per week.
+    """
     permission_classes = (AllowAny,)
 
     def get(self, request, last_n_days, format=None):
@@ -228,6 +251,9 @@ class StatsView(APIView):
         })
 
 class InteractomeAtlasProxyView(APIView):
+    """
+    A proxy view to the Interactome Atlas API.
+    """
     permission_classes = (AllowAny,)
 
     def post(self, request, format=None):
@@ -237,6 +263,9 @@ class InteractomeAtlasProxyView(APIView):
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class PrimitiveStatsTestView(APIView):
+    """
+    A view to perform a primitive statistical t-test on provided data.
+    """
     permission_classes = (AllowAny,)
 
     def post(self, request, format=None):
@@ -251,6 +280,10 @@ class PrimitiveStatsTestView(APIView):
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class CompareSessionView(APIView):
+    """
+    A view to initiate a background job to compare data from multiple Curtain sessions.
+    It uses Django Channels to send real-time feedback to the client.
+    """
     permission_classes = (AllowAny,)
 
     def post(self, request, format=None):
@@ -284,6 +317,9 @@ class CompareSessionView(APIView):
 
 
 class JobResultView(APIView):
+    """
+    A view to check the status and result of a background job.
+    """
     permission_classes = (AllowAny,)
     def get(self, request, job_id):
         connection = django_rq.get_connection()
@@ -305,6 +341,9 @@ class JobResultView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 class APIKeyView(APIView):
+    """
+    A simpler, non-ViewSet view for managing user API keys.
+    """
     permission_classes = (IsAuthenticated,)
 
     def post(self, request):
