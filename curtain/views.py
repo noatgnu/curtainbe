@@ -178,20 +178,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     Custom serializer to handle 'remember_me' parameter.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['remember_me'] = serializers.BooleanField(default=False, required=False)
+    remember_me = serializers.BooleanField(default=False, required=False, write_only=True)
 
     def validate(self, attrs):
+        remember_me = attrs.pop('remember_me', False)
         data = super().validate(attrs)
-        remember_me = attrs.get('remember_me', False)
 
         if remember_me:
-            refresh = self.get_token(self.user)
+            refresh = RefreshToken.for_user(self.user)
             refresh.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS))
             access = refresh.access_token
             access.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS))
-
             data['refresh'] = str(refresh)
             data['access'] = str(access)
 
