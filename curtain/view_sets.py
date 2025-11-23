@@ -1229,3 +1229,17 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
             data={"message": "Curtain removed from collection", "collection": serializer.data},
             status=status.HTTP_200_OK
         )
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.AllowAny()])
+    def curtains(self, request, pk=None):
+        """
+        Get all curtain sessions in this collection with full details.
+        """
+        collection = self.get_object()
+        curtains = collection.curtains.filter(enable=True)
+
+        serializer = CurtainSerializer(curtains, many=True)
+        return Response(
+            data={"collection_id": collection.id, "collection_name": collection.name, "curtains": serializer.data},
+            status=status.HTTP_200_OK
+        )
