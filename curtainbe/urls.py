@@ -21,7 +21,8 @@ from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from curtain.view_sets import UserViewSet, KinaseLibraryViewSet, DataFilterListViewSet, CurtainViewSet, \
-    UserAPIKeyViewSets, UserPublicKeyViewSets, DataCiteViewSets, AnnouncementViewSet, PermanentLinkRequestViewSet
+    UserAPIKeyViewSets, UserPublicKeyViewSets, DataCiteViewSets, AnnouncementViewSet, PermanentLinkRequestViewSet, \
+    CurtainCollectionViewSet
 from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHView, KinaseLibraryProxyView, \
     DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView, \
     APIKeyView, DataCiteFileView, CustomTokenObtainPairView
@@ -37,6 +38,7 @@ router.register(r'api_key', UserAPIKeyViewSets)
 router.register(r'datacite', DataCiteViewSets)
 router.register(r'announcements', AnnouncementViewSet)
 router.register(r'permanent-link-requests', PermanentLinkRequestViewSet)
+router.register(r'curtain-collections', CurtainCollectionViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

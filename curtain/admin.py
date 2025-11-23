@@ -17,7 +17,7 @@ from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, Co
 from .models import (
     DataCite, Curtain, DataFilterList, ExtraProperties, UserAPIKey, UserPublicKey,
     SocialPlatform, KinaseLibraryModel, CurtainAccessToken, DataAESEncryptionFactors,
-    DataHash, LastAccess, Announcement, PermanentLinkRequest
+    DataHash, LastAccess, Announcement, PermanentLinkRequest, CurtainCollection
 )
 from django.conf import settings
 
@@ -693,4 +693,35 @@ class PermanentLinkRequestAdmin(admin.ModelAdmin):
             count += 1
         self.message_user(request, f'{count} request(s) rejected.')
     reject_requests.short_description = 'Reject selected requests'
+
+
+@admin.register(CurtainCollection)
+class CurtainCollectionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'owner', 'curtain_count', 'created', 'updated')
+    list_filter = ('created', 'updated')
+    search_fields = ('name', 'description', 'owner__username')
+    readonly_fields = ('created', 'updated')
+    filter_horizontal = ('curtains',)
+    ordering = ('-updated',)
+
+    fieldsets = (
+        ('Collection Information', {
+            'fields': ('name', 'description', 'owner')
+        }),
+        ('Curtain Sessions', {
+            'fields': ('curtains',)
+        }),
+        ('Timestamps', {
+            'fields': ('created', 'updated'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def curtain_count(self, obj):
+        return obj.curtains.count()
+    curtain_count.short_description = 'Curtains'
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('owner').prefetch_related('curtains')
 

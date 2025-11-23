@@ -371,3 +371,21 @@ class PermanentLinkRequest(models.Model):
             self.admin_notes = notes
         self.save()
 
+
+class CurtainCollection(models.Model):
+    """
+    Model representing a collection of curtain sessions grouped together by a user.
+    """
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="curtain_collections")
+    curtains = models.ManyToManyField(Curtain, related_name="collections", blank=True)
+
+    class Meta:
+        ordering = ['-updated']
+
+    def __str__(self):
+        return f"{self.name} ({self.owner.username})"
+

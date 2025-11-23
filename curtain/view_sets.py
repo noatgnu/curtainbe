@@ -38,12 +38,13 @@ from django.db import transaction
 import io
 
 from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
-    DataAESEncryptionFactors, LastAccess, DataCite, Announcement, PermanentLinkRequest
+    DataAESEncryptionFactors, LastAccess, DataCite, Announcement, PermanentLinkRequest, CurtainCollection
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
-    IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey
+    IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey, IsCollectionOwner
 from curtain.pydantic_models import DataCiteForm
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
-    UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer, AnnouncementSerializer, PermanentLinkRequestSerializer
+    UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer, AnnouncementSerializer, PermanentLinkRequestSerializer, \
+    CurtainCollectionSerializer
 from curtain.utils import is_user_staff, delete_file_related_objects, calculate_boxplot_parameters, \
     check_nan_return_none, get_uniprot_data, encrypt_data
 from curtain.validations import curtain_query_schema, kinase_library_query_schema, data_filter_list_query_schema
@@ -1074,5 +1075,157 @@ class PermanentLinkRequestViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(permanent_request)
         return Response(
             data={"message": "Request rejected", "request": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+
+class CurtainCollectionViewSet(viewsets.ModelViewSet):
+    """
+    A viewset for managing curtain collections.
+    Users can create collections and group their accessible curtain sessions.
+    Unauthenticated users can view collections (read-only).
+    """
+    queryset = CurtainCollection.objects.all()
+    serializer_class = CurtainCollectionSerializer
+    filter_backends = [filters.OrderingFilter, filters.SearchFilter]
+    search_fields = ["name", "description"]
+    ordering_fields = ("id", "created", "updated", "name")
+    ordering = ("-updated",)
+
+    def get_permissions(self):
+        """
+        Allow read-only access for unauthenticated users.
+        Require authentication for create operations.
+        Require ownership for update, delete, add_curtain, and remove_curtain operations.
+        """
+        if self.action in ['list', 'retrieve']:
+            return [permissions.AllowAny()]
+        elif self.action == 'create':
+            return [permissions.IsAuthenticated()]
+        elif self.action in ['update', 'partial_update', 'destroy', 'add_curtain', 'remove_curtain']:
+            return [permissions.IsAuthenticated(), IsCollectionOwner()]
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        """
+        Returns all collections by default.
+        Supports filtering:
+        - owned=true: Filter for only collections owned by the current user (requires authentication)
+        - curtain_id: Filter by curtain ID
+        - link_id: Filter by curtain link ID
+        """
+        queryset = self.queryset.all()
+
+        owned = self.request.query_params.get('owned')
+        if owned and owned.lower() == 'true':
+            if self.request.user.is_authenticated:
+                queryset = queryset.filter(owner=self.request.user)
+            else:
+                queryset = queryset.none()
+
+        curtain_id = self.request.query_params.get('curtain_id')
+        link_id = self.request.query_params.get('link_id')
+
+        if curtain_id:
+            queryset = queryset.filter(curtains__id=curtain_id)
+        elif link_id:
+            queryset = queryset.filter(curtains__link_id=link_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        """
+        Set the owner to the current user when creating a collection.
+        """
+        serializer.save(owner=self.request.user)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def add_curtain(self, request, pk=None):
+        """
+        Add a curtain session to the collection.
+        User must have access to the curtain (owner or public).
+        """
+        collection = self.get_object()
+        curtain_id = request.data.get('curtain_id')
+        link_id = request.data.get('link_id')
+
+        if not curtain_id and not link_id:
+            return Response(
+                data={"error": "Either curtain_id or link_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            if curtain_id:
+                curtain = Curtain.objects.get(id=curtain_id)
+            else:
+                curtain = Curtain.objects.get(link_id=link_id)
+        except Curtain.DoesNotExist:
+            return Response(
+                data={"error": "Curtain not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not curtain.enable:
+            return Response(
+                data={"error": "Cannot add disabled curtain to collection"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if request.user not in curtain.owners.all():
+            return Response(
+                data={"error": "You do not have access to this curtain"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if curtain in collection.curtains.all():
+            return Response(
+                data={"error": "Curtain already in collection"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        collection.curtains.add(curtain)
+        serializer = self.get_serializer(collection)
+        return Response(
+            data={"message": "Curtain added to collection", "collection": serializer.data},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def remove_curtain(self, request, pk=None):
+        """
+        Remove a curtain session from the collection.
+        """
+        collection = self.get_object()
+        curtain_id = request.data.get('curtain_id')
+        link_id = request.data.get('link_id')
+
+        if not curtain_id and not link_id:
+            return Response(
+                data={"error": "Either curtain_id or link_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            if curtain_id:
+                curtain = Curtain.objects.get(id=curtain_id)
+            else:
+                curtain = Curtain.objects.get(link_id=link_id)
+        except Curtain.DoesNotExist:
+            return Response(
+                data={"error": "Curtain not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if curtain not in collection.curtains.all():
+            return Response(
+                data={"error": "Curtain not in collection"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        collection.curtains.remove(curtain)
+        serializer = self.get_serializer(collection)
+        return Response(
+            data={"message": "Curtain removed from collection", "collection": serializer.data},
             status=status.HTTP_200_OK
         )

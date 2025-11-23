@@ -6,7 +6,7 @@ from rest_framework import serializers
 from django.urls import reverse
 
 from curtain.models import Curtain, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
-    DataAESEncryptionFactors, DataHash, LastAccess, DataCite, Announcement, PermanentLinkRequest
+    DataAESEncryptionFactors, DataHash, LastAccess, DataCite, Announcement, PermanentLinkRequest, CurtainCollection
 from curtainbe import settings
 from django.contrib.auth.models import User
 
@@ -190,3 +190,23 @@ class PermanentLinkRequestSerializer(serializers.ModelSerializer):
                   "reviewed_by_username", "admin_notes"]
         read_only_fields = ["id", "requested_by", "requested_at", "reviewed_at", "reviewed_by", "curtain_link_id",
                             "requested_by_username", "reviewed_by_username"]
+
+
+class CurtainCollectionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CurtainCollection model.
+    """
+    owner_username = serializers.SerializerMethodField()
+    curtain_count = serializers.SerializerMethodField()
+
+    def get_owner_username(self, collection):
+        return collection.owner.username
+
+    def get_curtain_count(self, collection):
+        return collection.curtains.count()
+
+    class Meta:
+        model = CurtainCollection
+        fields = ["id", "created", "updated", "name", "description", "owner", "owner_username",
+                  "curtains", "curtain_count"]
+        read_only_fields = ["id", "created", "updated", "owner", "owner_username", "curtain_count"]

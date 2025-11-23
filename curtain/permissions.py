@@ -71,6 +71,15 @@ class IsDataFilterListOwner(BasePermission):
     def has_object_permission(self, request, view, obj):
         if bool(request.user and request.user.is_authenticated):
             return bool(request.user == obj.user)
+
+
+class IsCollectionOwner(BasePermission):
+    """
+    Permission to check if the user is the owner of the collection.
+    """
+    def has_object_permission(self, request, view, obj):
+        if bool(request.user and request.user.is_authenticated):
+            return bool(request.user == obj.owner)
         return False
 
 class HasUserAPIKey(BaseHasAPIKey):
