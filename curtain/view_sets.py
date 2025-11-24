@@ -779,10 +779,86 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                                 file_url = request.build_absolute_uri(file_path)
                             if "alternateIdentifiers" not in form_data:
                                 form_data["alternateIdentifiers"] = []
+
+                            identifier_type = "Curtain Main Session Data" if data_cite.collection else "Direct data access URL"
                             form_data["alternateIdentifiers"].append({
                                 "alternateIdentifier": file_url,
-                                "alternateIdentifierType": "Direct data access URL"
+                                "alternateIdentifierType": identifier_type
                             })
+                            data_cite.form_data = form_data
+
+                        if data_cite.collection:
+                            if "alternateIdentifiers" not in form_data:
+                                form_data["alternateIdentifiers"] = []
+
+                            collection_metadata = {
+                                "collection_id": data_cite.collection.id,
+                                "collection_name": data_cite.collection.name,
+                                "collection_description": data_cite.collection.description,
+                                "main_session": {
+                                    "curtain_id": data_cite.curtain.id if data_cite.curtain else None,
+                                    "link_id": data_cite.curtain.link_id if data_cite.curtain else None
+                                },
+                                "sessions": []
+                            }
+
+                            collection_sessions = data_cite.collection.curtains.filter(enable=True)
+
+                            if data_cite.curtain:
+                                collection_sessions = collection_sessions.exclude(id=data_cite.curtain.id)
+
+                            for curtain_session in collection_sessions:
+                                with transaction.atomic():
+                                    session_datacite = DataCite.objects.create(
+                                        user=data_cite.user,
+                                        contact_email=data_cite.contact_email,
+                                        curtain=curtain_session,
+                                        status="published",
+                                        lock=True,
+                                        title=f"{data_cite.title} - Session {curtain_session.link_id[:8]}"
+                                    )
+
+                                    session_datacite.local_file.save(
+                                        f"collection_{data_cite.collection.id}_{curtain_session.id}_{curtain_session.file.name.split('/')[-1]}",
+                                        curtain_session.file,
+                                        save=False
+                                    )
+                                    session_datacite.save()
+
+                                session_file_path = reverse('datacite_file', kwargs={'datacite_id': session_datacite.id})
+                                if settings.SITE_DOMAIN:
+                                    session_file_url = f"{settings.SITE_DOMAIN.rstrip('/')}{session_file_path}"
+                                else:
+                                    session_file_url = request.build_absolute_uri(session_file_path)
+
+                                form_data["alternateIdentifiers"].append({
+                                    "alternateIdentifier": session_file_url,
+                                    "alternateIdentifierType": "Curtain Alternative Session Data"
+                                })
+
+                                collection_metadata["sessions"].append({
+                                    "curtain_id": curtain_session.id,
+                                    "link_id": curtain_session.link_id,
+                                    "data_url": session_file_url
+                                })
+
+                            collection_json = json.dumps(collection_metadata, indent=2)
+                            collection_json_file = io.BytesIO(collection_json.encode('utf-8'))
+
+                            collection_json_filename = f"collection_{data_cite.collection.id}_metadata.json"
+                            with open(os.path.join(settings.MEDIA_ROOT, 'datacite_files', collection_json_filename), 'wb') as f:
+                                f.write(collection_json_file.getvalue())
+
+                            if settings.SITE_DOMAIN:
+                                collection_metadata_url = f"{settings.SITE_DOMAIN.rstrip('/')}/media/datacite_files/{collection_json_filename}"
+                            else:
+                                collection_metadata_url = request.build_absolute_uri(f"/media/datacite_files/{collection_json_filename}")
+
+                            form_data["alternateIdentifiers"].append({
+                                "alternateIdentifier": collection_metadata_url,
+                                "alternateIdentifierType": "Curtain Collection Metadata"
+                            })
+
                             data_cite.form_data = form_data
 
                         doi = client.draft_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}",

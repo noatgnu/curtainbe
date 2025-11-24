@@ -352,8 +352,8 @@ class DataCiteAdmin(admin.ModelAdmin):
             'fields': ('user', 'contact_email')
         }),
         ('Data', {
-            'fields': ('curtain', 'local_file', 'local_file_link', 'form_data', 'pii_statement'),
-            'description': 'Local file is automatically copied from Curtain and stored on host filesystem'
+            'fields': ('curtain', 'collection', 'local_file', 'local_file_link', 'form_data', 'pii_statement'),
+            'description': 'Select either a single curtain or a collection. If collection is selected, all enabled curtains in the collection will be included as relatedIdentifiers in DataCite metadata.'
         }),
         ('Timestamps', {
             'fields': ('created', 'updated'),

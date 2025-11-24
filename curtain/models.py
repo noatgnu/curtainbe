@@ -221,6 +221,12 @@ class DataCite(models.Model):
         blank=True,
         null=True
     )
+    collection = models.ForeignKey(
+        "CurtainCollection", on_delete=models.SET_NULL, related_name="data_cite",
+        blank=True,
+        null=True,
+        help_text="Optional collection - if set, all curtain sessions in collection will be included as relatedIdentifiers"
+    )
     local_file = models.FileField(
         upload_to="datacite_files/",
         storage=DataCiteLocalStorage,
