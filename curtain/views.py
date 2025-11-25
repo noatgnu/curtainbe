@@ -182,17 +182,33 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         remember_me = attrs.pop('remember_me', False)
-        data = super().validate(attrs)
 
         if remember_me:
+            from rest_framework_simplejwt.settings import api_settings
+            from rest_framework.exceptions import AuthenticationFailed
+            from django.contrib.auth import authenticate
+
+            authenticate_kwargs = {
+                self.username_field: attrs[self.username_field],
+                'password': attrs['password'],
+            }
+
+            self.user = authenticate(**authenticate_kwargs)
+
+            if self.user is None or not self.user.is_active:
+                raise AuthenticationFailed('No active account found with the given credentials')
+
             refresh = RefreshToken.for_user(self.user)
             refresh.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS))
             access = refresh.access_token
             access.set_exp(lifetime=timedelta(days=settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS))
-            data['refresh'] = str(refresh)
-            data['access'] = str(access)
 
-        return data
+            return {
+                'refresh': str(refresh),
+                'access': str(access),
+            }
+        else:
+            return super().validate(attrs)
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
