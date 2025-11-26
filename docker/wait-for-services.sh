@@ -43,12 +43,14 @@ if [ $$ -eq 1 ]; then
 
     while [ $attempt -lt $max_attempts ]; do
       if [ -n "$REDIS_PASSWORD" ]; then
-        redis_check=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" ping 2>&1 || echo "failed")
+        redis_check=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" -a "$REDIS_PASSWORD" --no-auth-warning ping 2>&1)
+        redis_exit_code=$?
       else
-        redis_check=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>&1 || echo "failed")
+        redis_check=$(redis-cli -h "$REDIS_HOST" -p "$REDIS_PORT" ping 2>&1)
+        redis_exit_code=$?
       fi
 
-      if [ "$redis_check" = "PONG" ]; then
+      if [ $redis_exit_code -eq 0 ] && echo "$redis_check" | grep -q "PONG"; then
         echo "✓ Redis ready" >&2
         break
       fi
@@ -57,11 +59,14 @@ if [ $$ -eq 1 ]; then
 
       if [ $attempt -ge $max_attempts ]; then
         echo "ERROR: Redis not available after $max_attempts attempts" >&2
+        echo "Last Redis response: $redis_check" >&2
+        echo "Exit code: $redis_exit_code" >&2
         exit 1
       fi
 
       if [ $((attempt % 10)) -eq 1 ]; then
         echo "Waiting for Redis... (attempt $attempt/$max_attempts)" >&2
+        echo "Redis check output: '$redis_check'" >&2
       fi
 
       sleep 2
