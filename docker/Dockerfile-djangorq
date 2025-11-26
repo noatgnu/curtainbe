@@ -6,11 +6,19 @@ RUN curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | te
 RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 7FCC7D46ACCC4CF8
 RUN apt-get update
-RUN apt-get -y install postgresql-client-15
+RUN apt-get -y install postgresql-client-15 redis-tools
 WORKDIR /app
 RUN mkdir "/app/media"
 RUN mkdir "/app/backup"
 COPY . /app/
 
 RUN pip install -r requirements.txt
-CMD ["python", "manage.py",  "rqworker", "default"]
+
+COPY docker/wait-for-services.sh /wait-for-services.sh
+RUN chmod +x /wait-for-services.sh
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD python -c "import django_rq; django_rq.get_connection().ping()" || exit 1
+
+ENTRYPOINT ["/wait-for-services.sh"]
+CMD ["python", "manage.py", "rqworker", "default"]
