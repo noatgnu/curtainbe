@@ -20,7 +20,7 @@ RUN chmod +x /wait-for-services.sh
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
   CMD curl -f http://localhost:8000/ || exit 1
 
 ENTRYPOINT ["/wait-for-services.sh"]
