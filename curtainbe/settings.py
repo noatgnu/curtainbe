@@ -278,6 +278,10 @@ if os.environ.get("WORKING_ENV") == "DEBUG":
             'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
             'HOST': os.environ.get('POSTGRES_HOST', 'db'),
             'PORT': int(os.environ.get('POSTGRES_PORT', '5432')),
+            'CONN_MAX_AGE': 600,  # Keep connections alive for 10 minutes
+            'OPTIONS': {
+                'connect_timeout': 10,
+            },
         },
     }
     CHANNEL_LAYERS = {
@@ -309,6 +313,10 @@ if os.environ.get("WORKING_ENV") == "PRODUCTION":
             'PASSWORD': os.environ.get('POSTGRES_PASSWORD'),
             'HOST': os.environ.get('POSTGRES_HOST', 'db'),
             'PORT': int(os.environ.get('POSTGRES_PORT', '5432')),
+            'CONN_MAX_AGE': 600,  # Keep connections alive for 10 minutes
+            'OPTIONS': {
+                'connect_timeout': 10,
+            },
         },
     }
     CHANNEL_LAYERS = {
