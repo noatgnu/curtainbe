@@ -1,18 +1,13 @@
 #!/bin/bash
 set -e
 
-# Use environment variables with fallback to command line arguments
-POSTGRES_HOST="${POSTGRES_HOST:-${1:-localhost}}"
-POSTGRES_PORT="${POSTGRES_PORT:-${2:-5432}}"
+# Use environment variables (don't use command line arguments for host/port anymore)
+POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 POSTGRES_DB="${POSTGRES_DB:-${POSTGRES_NAME:-postgres}}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 
-# Shift arguments if they were provided
-if [ $# -ge 2 ]; then
-  shift 2
-fi
-cmd="$@"
 
 >&2 echo "=== Database Connection Check ==="
 >&2 echo "POSTGRES_HOST: ${POSTGRES_HOST}"
@@ -119,5 +114,5 @@ else
   >&2 echo "Redis check skipped (REDIS_HOST not set)"
 fi
 
->&2 echo "All services are up - executing command"
-exec $cmd
+>&2 echo "All services are up - executing command: $@"
+exec "$@"
