@@ -49,8 +49,14 @@ class UserAPIKeyInline(admin.TabularInline):
 class UserPublicKeyInline(admin.TabularInline):
     model = UserPublicKey
     extra = 0
-    readonly_fields = ('created',)
-    fields = ('created', 'public_key')
+    readonly_fields = ('created', 'public_key_display')
+    fields = ('created', 'public_key_display')
+
+    def public_key_display(self, obj):
+        if obj.pk and obj.public_key:
+            return format_html('<code style="font-size: 10px;">{}</code>', obj.public_key[:100].hex() + '...' if len(obj.public_key) > 100 else obj.public_key.hex())
+        return '-'
+    public_key_display.short_description = 'Public Key (hex)'
 
 
 class CustomUserAdmin(BaseUserAdmin):
