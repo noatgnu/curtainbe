@@ -29,6 +29,15 @@ class ExtraPropertiesInline(admin.StackedInline):
     fk_name = 'user'
     fields = ('curtain_link_limits', 'curtain_link_limit_exceed', 'curtain_post', 'social_platform', 'default_public_key')
 
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        if obj:
+            formset.form.base_fields['default_public_key'].queryset = UserPublicKey.objects.filter(user=obj)
+        else:
+            if 'default_public_key' in formset.form.base_fields:
+                formset.form.base_fields['default_public_key'].queryset = UserPublicKey.objects.none()
+        return formset
+
 
 class UserAPIKeyInline(admin.TabularInline):
     model = UserAPIKey
