@@ -226,6 +226,14 @@ class SitePropertiesView(APIView):
     permission_classes = (AllowAny,)
 
     def get(self, request, format=None):
+        app_type = request.query_params.get('app', '').lower()
+
+        umami_website_id = settings.UMAMI_WEBSITE_ID
+        if app_type == 'curtainptm':
+            umami_website_id = settings.UMAMI_WEBSITE_ID_CURTAINPTM
+        elif app_type == 'curtain':
+            umami_website_id = settings.UMAMI_WEBSITE_ID_CURTAIN
+
         return Response(data={
             "non_user_post": settings.CURTAIN_ALLOW_NON_USER_POST,
             "allow_user_set_permanent": settings.CURTAIN_ALLOW_USER_SET_PERMANENT,
@@ -235,7 +243,7 @@ class SitePropertiesView(APIView):
             "jwt_refresh_token_lifetime_days": settings.JWT_REFRESH_TOKEN_LIFETIME_DAYS,
             "jwt_remember_me_access_token_lifetime_days": settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS,
             "jwt_remember_me_refresh_token_lifetime_days": settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS,
-            "umami_website_id": settings.UMAMI_WEBSITE_ID,
+            "umami_website_id": umami_website_id,
             "umami_url": settings.UMAMI_URL
         })
 
