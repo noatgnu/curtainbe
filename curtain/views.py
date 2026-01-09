@@ -19,6 +19,8 @@ from rest_framework.response import Response
 from rq.job import Job
 from scipy.stats import ttest_ind
 
+from django.contrib.auth.base_user import BaseUserManager
+from django.utils.crypto import get_random_string
 from curtain.models import User, ExtraProperties, SocialPlatform, Curtain, UserAPIKey, DataCite
 from curtainbe import settings
 import requests
@@ -153,7 +155,7 @@ class ORCIDOAUTHView(APIView):
                 else:
                     # create a new user with the ORCID ID as the username
                     user = User.objects.create_user(username=data["orcid"],
-                                                    password=User.objects.make_random_password())
+                                                    password=get_random_string(50))
                     #user.is_authenticated = True
 
                     #user.save()
