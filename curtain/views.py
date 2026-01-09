@@ -122,25 +122,18 @@ class ORCIDOAUTHView(APIView):
                 # get the user from the ORCID ID
                 user = User.objects.filter(username=data["orcid"]).first()
 
-                # print(user)
-                # check if the user exists
                 if user:
-                    # check if the user has been assigned a social platform
                     social = SocialPlatform.objects.filter(name="ORCID").first()
-                    
-                    # Ensure ExtraProperties exists
+
                     if not hasattr(user, 'extraproperties'):
                         ex = ExtraProperties(user=user)
                         ex.save()
-                        # Refresh user to get the relation
                         user.refresh_from_db()
 
                     if social:
                         if user.extraproperties.social_platform != social:
-                            # assign the user to the social platform
                             user.extraproperties.social_platform = social
                             user.extraproperties.save()
-                    # create a refresh token for the user
                     remember_me = self.request.data.get("remember_me", False)
                     refresh_token = RefreshToken.for_user(user)
 
@@ -153,21 +146,14 @@ class ORCIDOAUTHView(APIView):
 
                     return Response(data={"refresh": str(refresh_token), "access": str(access_token)})
                 else:
-                    # create a new user with the ORCID ID as the username
                     user = User.objects.create_user(username=data["orcid"],
                                                     password=get_random_string(50))
-                    #user.is_authenticated = True
-
-                    #user.save()
-                    # create a new ExtraProperties object for the user
+                    user.save()
                     ex = ExtraProperties(user=user)
                     ex.save()
-                    # assign the user to the ORCID social platform
                     social, created = SocialPlatform.objects.get_or_create(name="ORCID")
-                    # social.save() # Not needed as get_or_create saves it
                     ex.social_platform = social
                     ex.save()
-                    # create a refresh token for the user
                     remember_me = self.request.data.get("remember_me", False)
                     refresh_token = RefreshToken.for_user(user)
 
