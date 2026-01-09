@@ -125,8 +125,16 @@ class ORCIDOAUTHView(APIView):
                 if user:
                     # check if the user has been assigned a social platform
                     social = SocialPlatform.objects.filter(name="ORCID").first()
+                    
+                    # Ensure ExtraProperties exists
+                    if not hasattr(user, 'extraproperties'):
+                        ex = ExtraProperties(user=user)
+                        ex.save()
+                        # Refresh user to get the relation
+                        user.refresh_from_db()
+
                     if social:
-                        if social is not user.extraproperties.social_platform:
+                        if user.extraproperties.social_platform != social:
                             # assign the user to the social platform
                             user.extraproperties.social_platform = social
                             user.extraproperties.save()
@@ -153,8 +161,8 @@ class ORCIDOAUTHView(APIView):
                     ex = ExtraProperties(user=user)
                     ex.save()
                     # assign the user to the ORCID social platform
-                    social = SocialPlatform.objects.get_or_create(SocialPlatform(name="ORCID"))
-                    social.save()
+                    social, created = SocialPlatform.objects.get_or_create(name="ORCID")
+                    # social.save() # Not needed as get_or_create saves it
                     ex.social_platform = social
                     ex.save()
                     # create a refresh token for the user
@@ -169,7 +177,13 @@ class ORCIDOAUTHView(APIView):
                         access_token = refresh_token.access_token
 
                     return Response(data={"refresh": str(refresh_token), "access": str(access_token)})
-            except:
+            except Exception as e:
+                import traceback
+                print("ORCID Login Error:")
+                print(e)
+                traceback.print_exc()
+                if 'data' in locals():
+                    print("ORCID Data:", data)
                 return Response(status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
