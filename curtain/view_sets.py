@@ -1306,7 +1306,10 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
         Get all curtain sessions in this collection with full details.
         """
         collection = self.get_object()
-        curtains = collection.curtains.filter(enable=True)
+        if request.user.is_authenticated and request.user == collection.owner:
+            curtains = collection.curtains.all()
+        else:
+            curtains = collection.curtains.filter(enable=True)
 
         serializer = CurtainSerializer(curtains, many=True)
         return Response(
