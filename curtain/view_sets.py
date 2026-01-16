@@ -1242,12 +1242,6 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        if not curtain.enable:
-            return Response(
-                data={"error": "Cannot add disabled curtain to collection"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         if request.user not in curtain.owners.all():
             return Response(
                 data={"error": "You do not have access to this curtain"},
