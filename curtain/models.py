@@ -386,6 +386,7 @@ class CurtainCollection(models.Model):
     updated = models.DateTimeField(auto_now=True)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
+    enable = models.BooleanField(default=False)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="curtain_collections")
     curtains = models.ManyToManyField(Curtain, related_name="collections", blank=True)
 

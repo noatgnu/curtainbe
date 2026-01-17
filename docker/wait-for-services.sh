@@ -73,6 +73,10 @@ if [ $$ -eq 1 ]; then
     done
   fi
 
+  echo "Running database migrations..." >&2
+  python manage.py migrate --noinput
+  echo "✓ Migrations complete" >&2
+
   echo "✓ All services ready - starting application" >&2
 fi
 

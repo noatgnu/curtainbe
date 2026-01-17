@@ -1184,11 +1184,11 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Returns all collections by default.
+        Returns collections based on user access.
         Supports filtering:
         - owned=true: Filter for only collections owned by the current user (requires authentication)
         - curtain_id: Filter by curtain ID
-        - link_id: Filter by curtain link ID
+        - link_id: Filter by curtain link ID (for curtains in collection)
         """
         queryset = self.queryset.all()
 
@@ -1198,6 +1198,11 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(owner=self.request.user)
             else:
                 queryset = queryset.none()
+        elif self.action == 'list':
+            if self.request.user.is_authenticated:
+                queryset = queryset.filter(Q(enable=True) | Q(owner=self.request.user))
+            else:
+                queryset = queryset.filter(enable=True)
 
         curtain_id = self.request.query_params.get('curtain_id')
         link_id = self.request.query_params.get('link_id')
@@ -1214,6 +1219,21 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
         Set the owner to the current user when creating a collection.
         """
         serializer.save(owner=self.request.user)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieve a collection by ID.
+        Only returns enabled collections or collections owned by the requesting user.
+        """
+        collection = self.get_object()
+        is_owner = request.user.is_authenticated and request.user == collection.owner
+        if not collection.enable and not is_owner:
+            return Response(
+                data={"error": "Collection not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        serializer = self.get_serializer(collection)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def add_curtain(self, request, pk=None):
@@ -1316,3 +1336,4 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
             data={"collection_id": collection.id, "collection_name": collection.name, "curtains": serializer.data},
             status=status.HTTP_200_OK
         )
+

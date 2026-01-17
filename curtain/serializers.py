@@ -198,6 +198,7 @@ class CurtainCollectionSerializer(serializers.ModelSerializer):
     """
     owner_username = serializers.SerializerMethodField()
     curtain_count = serializers.SerializerMethodField()
+    accessible_curtains = serializers.SerializerMethodField()
 
     def get_owner_username(self, collection):
         return collection.owner.username
@@ -205,8 +206,36 @@ class CurtainCollectionSerializer(serializers.ModelSerializer):
     def get_curtain_count(self, collection):
         return collection.curtains.count()
 
+    def get_accessible_curtains(self, collection):
+        request = self.context.get('request')
+        user = request.user if request and request.user.is_authenticated else None
+        curtain_type = request.query_params.get('curtain_type') if request else None
+
+        accessible = []
+        for curtain in collection.curtains.all():
+            if curtain_type and curtain.curtain_type != curtain_type:
+                continue
+
+            if curtain.enable:
+                accessible.append({
+                    "id": curtain.id,
+                    "link_id": curtain.link_id,
+                    "description": curtain.description,
+                    "created": curtain.created,
+                    "curtain_type": curtain.curtain_type,
+                })
+            elif user and (curtain.owners.filter(id=user.id).exists() or user.is_staff):
+                accessible.append({
+                    "id": curtain.id,
+                    "link_id": curtain.link_id,
+                    "description": curtain.description,
+                    "created": curtain.created,
+                    "curtain_type": curtain.curtain_type,
+                })
+        return accessible
+
     class Meta:
         model = CurtainCollection
-        fields = ["id", "created", "updated", "name", "description", "owner", "owner_username",
-                  "curtains", "curtain_count"]
-        read_only_fields = ["id", "created", "updated", "owner", "owner_username", "curtain_count"]
+        fields = ["id", "created", "updated", "name", "description", "enable", "owner", "owner_username",
+                  "curtains", "curtain_count", "accessible_curtains"]
+        read_only_fields = ["id", "created", "updated", "owner", "owner_username", "curtain_count", "accessible_curtains"]
