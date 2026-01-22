@@ -85,7 +85,7 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
             os.makedirs(temp_dir, exist_ok=True)
 
             # Use upload ID as temp filename
-            temp_filename = f"temp_{self.upload_id}_{self.id or 'new'}.tmp"
+            temp_filename = f"temp_{self.id}.tmp"
             temp_path = os.path.join(temp_dir, temp_filename)
 
             # Append chunk to local temp file
