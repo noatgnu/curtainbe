@@ -302,6 +302,7 @@ class CurtainChunkedUploadView(ChunkedUploadView):
             else:
                 c = Curtain()
 
+            name = request.data.get("name", "" if not is_update else c.name)
             description = request.data.get("description", "" if not is_update else c.description)
             enable = request.data.get("enable", "True" if not is_update else str(c.enable)) == "True"
             curtain_type = request.data.get("curtain_type", "TP" if not is_update else c.curtain_type)
@@ -318,6 +319,7 @@ class CurtainChunkedUploadView(ChunkedUploadView):
             if uploaded_file.file:
                 c.file = uploaded_file.file
 
+            c.name = name
             c.description = description
             c.enable = enable
             c.curtain_type = curtain_type
