@@ -313,15 +313,8 @@ class CurtainChunkedUploadView(ChunkedUploadView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            if uploaded_file.file and os.path.exists(uploaded_file.file.path):
-                with open(uploaded_file.file.path, "rb") as f:
-                    file_content = f.read()
-                    filename = uploaded_file.filename or f"{c.link_id}.json"
-                    c.file.save(
-                        filename,
-                        ContentFile(file_content),
-                        save=False
-                    )
+            if uploaded_file.file:
+                c.file = uploaded_file.file
 
             c.description = description
             c.enable = enable
