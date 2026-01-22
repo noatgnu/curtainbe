@@ -20,10 +20,11 @@ class IsFileOwnerOrPublic(BasePermission):
         return bool(request.user and request.user.is_authenticated and request.user in obj.project.owners.all())
 
 class IsNonUserPostAllow(BasePermission):
-    def has_object_permission(self, request, view, obj):
+    def has_permission(self, request, view):
         if settings.CURTAIN_ALLOW_NON_USER_POST:
-            if request.method == "POST":
+            if request.method == "POST" or request.method == "PUT":
                 return True
+        return False
 class IsCurtainOwnerOrPublic(BasePermission):
     def has_object_permission(self, request, view, obj):
         if obj.enable:
