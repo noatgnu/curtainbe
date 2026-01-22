@@ -72,6 +72,7 @@ class Curtain(models.Model):
     updated = models.DateTimeField(auto_now=True)
     link_id = models.TextField(unique=True, default=uuid.uuid4, null=False)
     file = models.FileField(upload_to="media/files/curtain_upload/")
+    name = models.TextField(blank=True, default="")
     description = models.TextField()
     owners = models.ManyToManyField(User, related_name="curtain")
     enable = models.BooleanField(default=True)

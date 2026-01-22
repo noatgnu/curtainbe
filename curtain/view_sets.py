@@ -153,6 +153,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
     filter_mappings = {
         "id": "id",
         "username": "owners__username",
+        "name": "name__icontains",
         "description": "description__icontains",
         "curtain_type": "curtain_type__in"
     }

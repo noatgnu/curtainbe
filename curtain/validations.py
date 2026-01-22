@@ -8,6 +8,7 @@ curtain_query_schema = base_query_params_schema.extend(
         "link_id": six.text_type,
         "created": DatetimeWithTZ(),
         "username": six.text_type,
+        "name": six.text_type,
         "description": six.text_type,
         "curtain_type": GenericSeparatedValidator(str, ",")
     }

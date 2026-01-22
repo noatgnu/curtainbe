@@ -246,7 +246,8 @@ class SitePropertiesView(APIView):
             "jwt_remember_me_access_token_lifetime_days": settings.JWT_REMEMBER_ME_ACCESS_TOKEN_LIFETIME_DAYS,
             "jwt_remember_me_refresh_token_lifetime_days": settings.JWT_REMEMBER_ME_REFRESH_TOKEN_LIFETIME_DAYS,
             "umami_website_id": umami_website_id,
-            "umami_url": settings.UMAMI_URL
+            "umami_url": settings.UMAMI_URL,
+            "orcid_client_id": settings.ORCID.get('client_id', '')
         })
 
 # Kinase Library Proxy view for getting kinase scores

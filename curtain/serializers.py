@@ -66,7 +66,7 @@ class CurtainSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Curtain
-        fields = ["id", "created", "link_id", "file", "enable", "description", "curtain_type", "encrypted", "permanent", "expiry_duration_months", "is_expired", "last_access_date", "data_cite"]
+        fields = ["id", "created", "link_id", "file", "enable", "name", "description", "curtain_type", "encrypted", "permanent", "expiry_duration_months", "is_expired", "last_access_date", "data_cite"]
         lookup_field = "link_id"
 
 
