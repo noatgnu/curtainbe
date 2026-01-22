@@ -14,7 +14,6 @@ from drf_chunked_upload.serializers import ChunkedUploadSerializer
 from drf_chunked_upload.views import ChunkedUploadView
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from curtain.models import Curtain
@@ -68,8 +67,14 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
 
         if self.status == self.COMPLETE and self.file and not self.file_size:
             try:
-                self.file_size = self.file.size
-            except (OSError, ValueError):
+                # Ensure file is closed before accessing size
+                if hasattr(self.file, 'close'):
+                    self.file.close()
+                if hasattr(self.file, 'size'):
+                    self.file_size = self.file.size
+                elif hasattr(self.file, 'path') and os.path.exists(self.file.path):
+                    self.file_size = os.path.getsize(self.file.path)
+            except (OSError, ValueError, AttributeError):
                 pass
 
         super().save(*args, **kwargs)
