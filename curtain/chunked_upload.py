@@ -58,6 +58,53 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
     class Meta:
         app_label = "curtain"
 
+    def append_chunk(self, chunk, chunk_size=None, save=True):
+        """
+        Override append_chunk to handle S3 and other remote storage backends properly.
+
+        For remote storage (S3, GCS), we accumulate chunks in a local temporary file
+        and upload when complete to avoid reading/writing the entire file on each chunk.
+        """
+        self.offset += chunk_size or len(chunk)
+
+        # Check if using remote storage
+        is_remote_storage = (
+            hasattr(self.file.storage, 'bucket') or
+            hasattr(self.file.storage, 'client') or
+            'S3' in str(type(self.file.storage)) or
+            'GCS' in str(type(self.file.storage)) or
+            'GoogleCloud' in str(type(self.file.storage))
+        )
+
+        if is_remote_storage:
+            # For remote storage, use a local temporary file approach
+            import tempfile
+
+            # Get or create temp file path
+            temp_dir = os.path.join(settings.BASE_DIR, 'temp_uploads')
+            os.makedirs(temp_dir, exist_ok=True)
+
+            # Use upload ID as temp filename
+            temp_filename = f"temp_{self.upload_id}_{self.id or 'new'}.tmp"
+            temp_path = os.path.join(temp_dir, temp_filename)
+
+            # Append chunk to local temp file
+            with open(temp_path, 'ab') as temp_file:
+                temp_file.write(chunk)
+
+            # Store the temp path for later upload
+            self._temp_upload_path = temp_path
+        else:
+            # Local file system - open file in append mode
+            try:
+                self.file.open(mode='ab')
+                self.file.write(chunk)
+            finally:
+                self.file.close()
+
+        if save:
+            self.save()
+
     def save(self, *args, **kwargs):
         if not self.original_filename and self.filename:
             self.original_filename = self.filename
@@ -65,11 +112,25 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
         if self.filename and not self.mime_type:
             self.mime_type, _ = mimetypes.guess_type(self.filename)
 
+        # Handle upload completion for remote storage
+        if self.status == self.COMPLETE and hasattr(self, '_temp_upload_path'):
+            temp_path = self._temp_upload_path
+            if os.path.exists(temp_path):
+                # Upload the temp file to remote storage
+                with open(temp_path, 'rb') as temp_file:
+                    filename = self.filename or self.generate_filename()
+                    from django.core.files.base import ContentFile
+                    self.file.save(filename, ContentFile(temp_file.read()), save=False)
+
+                # Clean up temp file
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+
         if self.status == self.COMPLETE and self.file and not self.file_size:
             try:
-                # Ensure file is closed before accessing size
-                if hasattr(self.file, 'close'):
-                    self.file.close()
+                # For remote storage, get size differently
                 if hasattr(self.file, 'size'):
                     self.file_size = self.file.size
                 elif hasattr(self.file, 'path') and os.path.exists(self.file.path):
