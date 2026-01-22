@@ -90,7 +90,8 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
 
             # Append chunk to local temp file
             with open(temp_path, 'ab') as temp_file:
-                temp_file.write(chunk)
+                for subchunk in chunk.chunks():
+                    temp_file.write(subchunk)
 
             # Store the temp path for later upload
             self._temp_upload_path = temp_path
@@ -98,7 +99,8 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
             # Local file system - open file in append mode
             try:
                 self.file.open(mode='ab')
-                self.file.write(chunk)
+                for subchunk in chunk.chunks():
+                    self.file.write(subchunk)
             finally:
                 self.file.close()
 
