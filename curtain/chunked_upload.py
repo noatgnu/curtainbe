@@ -370,7 +370,12 @@ class CurtainChunkedUploadView(ChunkedUploadView):
             c.permanent = permanent
             c.encrypted = encrypted
 
-            if uploaded_file.file:
+            if uploaded_file._is_remote_storage():
+                temp_path = uploaded_file._get_temp_path()
+                if os.path.exists(temp_path):
+                    with open(temp_path, 'rb') as f:
+                        c.file.save(str(c.link_id) + ".json", ContentFile(f.read()))
+            elif uploaded_file.file:
                 from django.core.files import File as djangoFile
                 uploaded_file.file.open(mode='rb')
                 c.file.save(str(c.link_id) + ".json", djangoFile(uploaded_file.file))
