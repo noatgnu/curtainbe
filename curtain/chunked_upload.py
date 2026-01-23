@@ -58,6 +58,32 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
     class Meta:
         app_label = "curtain"
 
+    @property
+    def checksum(self):
+        """
+        Override to calculate checksum from temp file for remote storage.
+
+        When using S3/GCS, chunks are stored in a local temp file during upload.
+        The parent's checksum property reads from self.file which would be empty,
+        so we need to read from the temp file instead.
+        """
+        temp_dir = os.path.join(settings.BASE_DIR, 'temp_uploads')
+        temp_path = os.path.join(temp_dir, f"temp_{self.id}.tmp")
+
+        if os.path.exists(temp_path):
+            checksum_type = getattr(settings, 'DRF_CHUNKED_UPLOAD_CHECKSUM', 'md5')
+            if checksum_type == 'sha256':
+                hasher = hashlib.sha256()
+            else:
+                hasher = hashlib.md5()
+
+            with open(temp_path, 'rb') as f:
+                for chunk in iter(lambda: f.read(8192), b''):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
+
+        return super().checksum
+
     def append_chunk(self, chunk, chunk_size=None, save=True):
         """
         Override append_chunk to handle S3 and other remote storage backends properly.
