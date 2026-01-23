@@ -70,7 +70,12 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
         temp_dir = os.path.join(settings.BASE_DIR, 'temp_uploads')
         temp_path = os.path.join(temp_dir, f"temp_{self.id}.tmp")
 
+        print(f"[CHECKSUM DEBUG] ID: {self.id}, temp_path: {temp_path}, exists: {os.path.exists(temp_path)}")
+
         if os.path.exists(temp_path):
+            file_size = os.path.getsize(temp_path)
+            print(f"[CHECKSUM DEBUG] Temp file size: {file_size} bytes")
+
             checksum_type = getattr(settings, 'DRF_CHUNKED_UPLOAD_CHECKSUM', 'md5')
             if checksum_type == 'sha256':
                 hasher = hashlib.sha256()
@@ -78,11 +83,16 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
                 hasher = hashlib.md5()
 
             with open(temp_path, 'rb') as f:
-                for chunk in iter(lambda: f.read(8192), b''):
-                    hasher.update(chunk)
-            return hasher.hexdigest()
+                for data in iter(lambda: f.read(8192), b''):
+                    hasher.update(data)
+            calculated = hasher.hexdigest()
+            print(f"[CHECKSUM DEBUG] Calculated checksum: {calculated}")
+            return calculated
 
-        return super().checksum
+        print(f"[CHECKSUM DEBUG] Temp file NOT FOUND, falling back to parent")
+        parent_checksum = super().checksum
+        print(f"[CHECKSUM DEBUG] Parent checksum: {parent_checksum}")
+        return parent_checksum
 
     def append_chunk(self, chunk, chunk_size=None, save=True):
         """
