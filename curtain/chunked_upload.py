@@ -101,9 +101,11 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
         For remote storage (S3, GCS), we accumulate chunks in a local temporary file
         and upload when complete to avoid reading/writing the entire file on each chunk.
         """
-        self.offset += chunk_size or len(chunk)
+        incoming_size = chunk_size or len(chunk)
+        print(f"[APPEND_CHUNK] ID: {self.id}, offset_before: {self.offset}, chunk_size: {incoming_size}")
 
-        # Check if using remote storage
+        self.offset += incoming_size
+
         is_remote_storage = (
             hasattr(self.file.storage, 'bucket') or
             hasattr(self.file.storage, 'client') or
@@ -112,22 +114,25 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
             'GoogleCloud' in str(type(self.file.storage))
         )
 
-        if is_remote_storage:
-            # For remote storage, use a local temporary file approach
-            import tempfile
+        print(f"[APPEND_CHUNK] is_remote_storage: {is_remote_storage}")
 
-            # Get or create temp file path
+        if is_remote_storage:
             temp_dir = os.path.join(settings.BASE_DIR, 'temp_uploads')
             os.makedirs(temp_dir, exist_ok=True)
 
-            # Use upload ID as temp filename
             temp_filename = f"temp_{self.id}.tmp"
             temp_path = os.path.join(temp_dir, temp_filename)
 
-            # Append chunk to local temp file
+            file_size_before = os.path.getsize(temp_path) if os.path.exists(temp_path) else 0
+
+            bytes_written = 0
             with open(temp_path, 'ab') as temp_file:
                 for subchunk in chunk.chunks():
                     temp_file.write(subchunk)
+                    bytes_written += len(subchunk)
+
+            file_size_after = os.path.getsize(temp_path)
+            print(f"[APPEND_CHUNK] temp_path: {temp_path}, size_before: {file_size_before}, bytes_written: {bytes_written}, size_after: {file_size_after}")
 
             # Store the temp path for later upload
             self._temp_upload_path = temp_path
