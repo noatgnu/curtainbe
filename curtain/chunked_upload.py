@@ -70,12 +70,7 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
         temp_dir = os.path.join(settings.BASE_DIR, 'temp_uploads')
         temp_path = os.path.join(temp_dir, f"temp_{self.id}.tmp")
 
-        print(f"[CHECKSUM DEBUG] ID: {self.id}, temp_path: {temp_path}, exists: {os.path.exists(temp_path)}")
-
         if os.path.exists(temp_path):
-            file_size = os.path.getsize(temp_path)
-            print(f"[CHECKSUM DEBUG] Temp file size: {file_size} bytes")
-
             checksum_type = getattr(settings, 'DRF_CHUNKED_UPLOAD_CHECKSUM', 'md5')
             if checksum_type == 'sha256':
                 hasher = hashlib.sha256()
@@ -85,14 +80,9 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
             with open(temp_path, 'rb') as f:
                 for data in iter(lambda: f.read(8192), b''):
                     hasher.update(data)
-            calculated = hasher.hexdigest()
-            print(f"[CHECKSUM DEBUG] Calculated checksum: {calculated}")
-            return calculated
+            return hasher.hexdigest()
 
-        print(f"[CHECKSUM DEBUG] Temp file NOT FOUND, falling back to parent")
-        parent_checksum = super().checksum
-        print(f"[CHECKSUM DEBUG] Parent checksum: {parent_checksum}")
-        return parent_checksum
+        return super().checksum
 
     def _is_remote_storage(self):
         return (
@@ -110,23 +100,13 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
 
     def append_chunk(self, chunk, chunk_size=None, save=True):
         incoming_size = chunk_size or len(chunk)
-        print(f"[APPEND_CHUNK] ID: {self.id}, offset_before: {self.offset}, chunk_size: {incoming_size}")
 
-        is_remote_storage = self._is_remote_storage()
-        print(f"[APPEND_CHUNK] is_remote_storage: {is_remote_storage}")
-
-        if is_remote_storage:
+        if self._is_remote_storage():
             temp_path = self._get_temp_path()
-            file_size_before = os.path.getsize(temp_path) if os.path.exists(temp_path) else 0
 
-            bytes_written = 0
             with open(temp_path, 'ab') as temp_file:
                 for subchunk in chunk.chunks():
                     temp_file.write(subchunk)
-                    bytes_written += len(subchunk)
-
-            file_size_after = os.path.getsize(temp_path)
-            print(f"[APPEND_CHUNK] temp_path: {temp_path}, size_before: {file_size_before}, bytes_written: {bytes_written}, size_after: {file_size_after}")
 
             self.offset += incoming_size
             self._temp_upload_path = temp_path
@@ -323,17 +303,13 @@ class CurtainChunkedUploadSerializer(ChunkedUploadSerializer):
         instance = super().create(validated_data)
 
         if file_data and instance._is_remote_storage():
-            print(f"[SERIALIZER CREATE] Remote storage detected, writing initial chunk to temp file")
             temp_path = instance._get_temp_path()
-            bytes_written = 0
 
             with open(temp_path, 'wb') as temp_file:
                 for chunk in file_data.chunks():
                     temp_file.write(chunk)
-                    bytes_written += len(chunk)
 
             instance._temp_upload_path = temp_path
-            print(f"[SERIALIZER CREATE] Wrote {bytes_written} bytes to temp file")
         elif file_data:
             instance.file = file_data
             instance.save()

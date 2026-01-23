@@ -48,3 +48,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.8"
+
+[dependency-groups]
+dev = [
+    "djangorestframework-stubs (>=3.16.7,<4.0.0)"
+]
