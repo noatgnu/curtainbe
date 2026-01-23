@@ -94,19 +94,8 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
         print(f"[CHECKSUM DEBUG] Parent checksum: {parent_checksum}")
         return parent_checksum
 
-    def append_chunk(self, chunk, chunk_size=None, save=True):
-        """
-        Override append_chunk to handle S3 and other remote storage backends properly.
-
-        For remote storage (S3, GCS), we accumulate chunks in a local temporary file
-        and upload when complete to avoid reading/writing the entire file on each chunk.
-        """
-        incoming_size = chunk_size or len(chunk)
-        print(f"[APPEND_CHUNK] ID: {self.id}, offset_before: {self.offset}, chunk_size: {incoming_size}")
-
-        self.offset += incoming_size
-
-        is_remote_storage = (
+    def _is_remote_storage(self):
+        return (
             hasattr(self.file.storage, 'bucket') or
             hasattr(self.file.storage, 'client') or
             'S3' in str(type(self.file.storage)) or
@@ -114,15 +103,20 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
             'GoogleCloud' in str(type(self.file.storage))
         )
 
+    def _get_temp_path(self):
+        temp_dir = os.path.join(settings.BASE_DIR, 'temp_uploads')
+        os.makedirs(temp_dir, exist_ok=True)
+        return os.path.join(temp_dir, f"temp_{self.id}.tmp")
+
+    def append_chunk(self, chunk, chunk_size=None, save=True):
+        incoming_size = chunk_size or len(chunk)
+        print(f"[APPEND_CHUNK] ID: {self.id}, offset_before: {self.offset}, chunk_size: {incoming_size}")
+
+        is_remote_storage = self._is_remote_storage()
         print(f"[APPEND_CHUNK] is_remote_storage: {is_remote_storage}")
 
         if is_remote_storage:
-            temp_dir = os.path.join(settings.BASE_DIR, 'temp_uploads')
-            os.makedirs(temp_dir, exist_ok=True)
-
-            temp_filename = f"temp_{self.id}.tmp"
-            temp_path = os.path.join(temp_dir, temp_filename)
-
+            temp_path = self._get_temp_path()
             file_size_before = os.path.getsize(temp_path) if os.path.exists(temp_path) else 0
 
             bytes_written = 0
@@ -134,10 +128,10 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
             file_size_after = os.path.getsize(temp_path)
             print(f"[APPEND_CHUNK] temp_path: {temp_path}, size_before: {file_size_before}, bytes_written: {bytes_written}, size_after: {file_size_after}")
 
-            # Store the temp path for later upload
+            self.offset += incoming_size
             self._temp_upload_path = temp_path
         else:
-            # Local file system - open file in append mode
+            self.offset += incoming_size
             try:
                 self.file.open(mode='ab')
                 for subchunk in chunk.chunks():
@@ -155,17 +149,14 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
         if self.filename and not self.mime_type:
             self.mime_type, _ = mimetypes.guess_type(self.filename)
 
-        # Handle upload completion for remote storage
         if self.status == self.COMPLETE and hasattr(self, '_temp_upload_path'):
             temp_path = self._temp_upload_path
             if os.path.exists(temp_path):
-                # Upload the temp file to remote storage
                 with open(temp_path, 'rb') as temp_file:
                     filename = self.filename or self.generate_filename()
                     from django.core.files.base import ContentFile
                     self.file.save(filename, ContentFile(temp_file.read()), save=False)
 
-                # Clean up temp file
                 try:
                     os.remove(temp_path)
                 except OSError:
@@ -173,7 +164,6 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
 
         if self.status == self.COMPLETE and self.file and not self.file_size:
             try:
-                # For remote storage, get size differently
                 if hasattr(self.file, 'size'):
                     self.file_size = self.file.size
                 elif hasattr(self.file, 'path') and os.path.exists(self.file.path):
@@ -310,6 +300,28 @@ class CurtainChunkedUploadSerializer(ChunkedUploadSerializer):
             "file_size",
         )
 
+    def create(self, validated_data):
+        file_data = validated_data.pop('file', None)
+        instance = super().create(validated_data)
+
+        if file_data and instance._is_remote_storage():
+            print(f"[SERIALIZER CREATE] Remote storage detected, writing initial chunk to temp file")
+            temp_path = instance._get_temp_path()
+            bytes_written = 0
+
+            with open(temp_path, 'wb') as temp_file:
+                for chunk in file_data.chunks():
+                    temp_file.write(chunk)
+                    bytes_written += len(chunk)
+
+            instance._temp_upload_path = temp_path
+            print(f"[SERIALIZER CREATE] Wrote {bytes_written} bytes to temp file")
+        elif file_data:
+            instance.file = file_data
+            instance.save()
+
+        return instance
+
 
 class CurtainChunkedUploadView(ChunkedUploadView):
     model = CurtainChunkedUpload
@@ -357,15 +369,18 @@ class CurtainChunkedUploadView(ChunkedUploadView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
-            if uploaded_file.file:
-                c.file = uploaded_file.file
-
             c.name = name
             c.description = description
             c.enable = enable
             c.curtain_type = curtain_type
             c.permanent = permanent
             c.encrypted = encrypted
+
+            if uploaded_file.file:
+                from django.core.files import File as djangoFile
+                uploaded_file.file.open(mode='rb')
+                c.file.save(str(c.link_id) + ".json", djangoFile(uploaded_file.file))
+                uploaded_file.file.close()
 
             if expiry_duration:
                 from datetime import timedelta
