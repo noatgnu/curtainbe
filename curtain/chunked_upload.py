@@ -142,6 +142,24 @@ class CurtainChunkedUpload(AbstractChunkedUpload):
         if save:
             self.save()
 
+    def completed(self, completed_at=None, ext=None):
+        if completed_at is None:
+            completed_at = timezone.now()
+
+        self.status = self.COMPLETE
+        self.completed_at = completed_at
+        self.save()
+
+        if not self._is_remote_storage() and self.file and self.file.name:
+            from drf_chunked_upload import settings as _settings
+            if ext is None:
+                ext = _settings.COMPLETE_EXT
+            if ext != _settings.INCOMPLETE_EXT:
+                original_path = self.file.path
+                self.file.name = os.path.splitext(self.file.name)[0] + ext
+                self.save()
+                os.rename(original_path, os.path.splitext(self.file.path)[0] + ext)
+
     def save(self, *args, **kwargs):
         if not self.original_filename and self.filename:
             self.original_filename = self.filename
