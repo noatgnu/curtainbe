@@ -84,6 +84,7 @@ class CustomUserAdmin(BaseUserAdmin):
     inlines = (ExtraPropertiesInline, UserAPIKeyInline, UserPublicKeyInline)
     list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active', 'date_joined', 'curtain_count')
     list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
+    search_fields = ('username', 'email', 'first_name', 'last_name')
 
     def curtain_count(self, obj):
         return obj.curtain.count()
@@ -129,6 +130,35 @@ class ExpiredStatusFilter(admin.SimpleListFilter):
         return queryset
 
 
+class MultipleIDsFilter(admin.SimpleListFilter):
+    """
+    Custom filter to search by multiple link_ids (comma, space, or newline separated)
+    """
+    title = 'multiple link IDs'
+    parameter_name = 'link_ids'
+    template = 'admin/curtain/multiple_ids_filter.html'
+
+    def lookups(self, request, model_admin):
+        return ()
+
+    def queryset(self, request, queryset):
+        if self.value():
+            import re
+            ids = re.split(r'[,\s\n]+', self.value().strip())
+            ids = [id.strip() for id in ids if id.strip()]
+            if ids:
+                return queryset.filter(link_id__in=ids)
+        return queryset
+
+    def choices(self, changelist):
+        yield {
+            'selected': self.value() is None,
+            'query_string': changelist.get_query_string(remove=[self.parameter_name]),
+            'display': 'All',
+            'value': self.value() or '',
+        }
+
+
 class DataAESEncryptionFactorsInline(admin.TabularInline):
     model = DataAESEncryptionFactors
     extra = 0
@@ -161,10 +191,10 @@ class LastAccessInline(admin.TabularInline):
 @admin.register(Curtain)
 class CurtainAdmin(admin.ModelAdmin):
     list_display = ('link_id_short', 'curtain_type', 'created', 'last_access_display', 'owner_list', 'enable', 'permanent', 'expired_status', 'encrypted')
-    list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', ExpiredStatusFilter, 'created', 'updated')
+    list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', ExpiredStatusFilter, MultipleIDsFilter, 'created', 'updated')
     search_fields = ('link_id', 'description', 'owners__username')
     readonly_fields = ('created', 'updated', 'link_id', 'expired_status', 'last_access_display')
-    filter_horizontal = ('owners',)
+    autocomplete_fields = ('owners',)
     date_hierarchy = 'created'
     list_per_page = 20
     actions = ['batch_add_owner', 'batch_add_to_collection']
@@ -221,14 +251,14 @@ class CurtainAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path('batch-add-owner/', self.admin_site.admin_view(self.batch_add_owner_view), name='curtain_batch_add_owner'),
-            path('batch-add-to-collection/', self.admin_site.admin_view(self.batch_add_to_collection_view), name='curtain_batch_add_to_collection'),
+            path('batch-add-owner/', self.admin_site.admin_view(self.batch_add_owner_view), name='curtain_curtain_batch_add_owner'),
+            path('batch-add-to-collection/', self.admin_site.admin_view(self.batch_add_to_collection_view), name='curtain_curtain_batch_add_to_collection'),
         ]
         return custom_urls + urls
 
     def batch_add_owner(self, request, queryset):
         selected = queryset.values_list('pk', flat=True)
-        return redirect(f"{reverse('admin:curtain_batch_add_owner')}?ids={','.join(str(pk) for pk in selected)}")
+        return redirect(f"{reverse('admin:curtain_curtain_batch_add_owner')}?ids={','.join(str(pk) for pk in selected)}")
     batch_add_owner.short_description = "Add owner to selected curtains"
 
     def batch_add_owner_view(self, request):
@@ -260,7 +290,7 @@ class CurtainAdmin(admin.ModelAdmin):
 
     def batch_add_to_collection(self, request, queryset):
         selected = queryset.values_list('pk', flat=True)
-        return redirect(f"{reverse('admin:curtain_batch_add_to_collection')}?ids={','.join(str(pk) for pk in selected)}")
+        return redirect(f"{reverse('admin:curtain_curtain_batch_add_to_collection')}?ids={','.join(str(pk) for pk in selected)}")
     batch_add_to_collection.short_description = "Add selected curtains to collection"
 
     def batch_add_to_collection_view(self, request):
@@ -317,6 +347,7 @@ class UserAPIKeyAdmin(admin.ModelAdmin):
     list_filter = ('can_read', 'can_create', 'can_update', 'can_delete', 'revoked', 'created')
     search_fields = ('name', 'user__username', 'prefix')
     readonly_fields = ('created', 'prefix')
+    autocomplete_fields = ('user',)
 
     fieldsets = (
         ('Basic Information', {
@@ -337,6 +368,7 @@ class UserPublicKeyAdmin(admin.ModelAdmin):
     list_filter = ('created',)
     search_fields = ('user__username',)
     readonly_fields = ('created',)
+    autocomplete_fields = ('user',)
     date_hierarchy = 'created'
 
     def public_key_preview(self, obj):
@@ -355,6 +387,7 @@ class DataFilterListAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'user', 'default')
     list_filter = ('category', 'default')
     search_fields = ('name', 'category', 'user__username')
+    autocomplete_fields = ('user',)
 
     fieldsets = (
         ('Filter Information', {
@@ -383,6 +416,7 @@ class CurtainAccessTokenAdmin(admin.ModelAdmin):
     list_filter = ('created',)
     search_fields = ('curtain__link_id', 'token')
     readonly_fields = ('created',)
+    autocomplete_fields = ('curtain',)
     date_hierarchy = 'created'
 
     def curtain_link(self, obj):
@@ -402,6 +436,7 @@ class DataAESEncryptionFactorsAdmin(admin.ModelAdmin):
     list_filter = ('created',)
     search_fields = ('curtain__link_id',)
     readonly_fields = ('created',)
+    autocomplete_fields = ('curtain',)
     date_hierarchy = 'created'
 
     def curtain_link(self, obj):
@@ -417,6 +452,7 @@ class DataHashAdmin(admin.ModelAdmin):
     list_filter = ('created',)
     search_fields = ('curtain__link_id', 'hash')
     readonly_fields = ('created',)
+    autocomplete_fields = ('curtain',)
     date_hierarchy = 'created'
 
     def curtain_link(self, obj):
@@ -436,6 +472,7 @@ class LastAccessAdmin(admin.ModelAdmin):
     list_filter = ('last_access',)
     search_fields = ('curtain__link_id',)
     readonly_fields = ('last_access',)
+    autocomplete_fields = ('curtain',)
     date_hierarchy = 'last_access'
 
     def curtain_link(self, obj):
@@ -449,6 +486,7 @@ class DataCiteAdmin(admin.ModelAdmin):
     list_filter = ('status', 'lock', 'created', 'updated')
     search_fields = ('title', 'doi', 'user__username', 'contact_email', 'curtain__link_id')
     readonly_fields = ('created', 'updated', 'doi', 'local_file', 'local_file_link')
+    autocomplete_fields = ('user', 'curtain', 'collection')
     date_hierarchy = 'updated'
     list_per_page = 20
     actions = ['approve_datacite', 'reject_datacite', 'unlock_datacite']
@@ -698,6 +736,7 @@ class PermanentLinkRequestAdmin(admin.ModelAdmin):
     list_filter = ('status', 'request_type', 'requested_at', 'reviewed_at')
     search_fields = ('curtain__link_id', 'requested_by__username', 'reviewed_by__username', 'reason', 'admin_notes')
     readonly_fields = ('requested_at', 'reviewed_at', 'curtain_link', 'requested_by_username')
+    autocomplete_fields = ('curtain', 'requested_by', 'reviewed_by')
     ordering = ('-requested_at',)
     actions = ['approve_requests', 'reject_requests']
 
@@ -806,19 +845,21 @@ class PermanentLinkRequestAdmin(admin.ModelAdmin):
 
 @admin.register(CurtainCollection)
 class CurtainCollectionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'owner', 'curtain_count', 'created', 'updated')
-    list_filter = ('created', 'updated')
+    list_display = ('name', 'owner', 'enable', 'curtain_count', 'enabled_curtain_count', 'created', 'updated')
+    list_filter = ('enable', 'created', 'updated')
     search_fields = ('name', 'description', 'owner__username')
     readonly_fields = ('created', 'updated')
-    filter_horizontal = ('curtains',)
+    autocomplete_fields = ('curtains', 'owner')
     ordering = ('-updated',)
+    actions = ['enable_all_curtains', 'disable_all_curtains', 'enable_collection', 'disable_collection']
 
     fieldsets = (
         ('Collection Information', {
-            'fields': ('name', 'description', 'owner')
+            'fields': ('name', 'description', 'owner', 'enable')
         }),
         ('Curtain Sessions', {
-            'fields': ('curtains',)
+            'fields': ('curtains',),
+            'description': 'Use "Manage Curtain Sharing" button below to toggle individual curtain sharing status.'
         }),
         ('Timestamps', {
             'fields': ('created', 'updated'),
@@ -828,9 +869,80 @@ class CurtainCollectionAdmin(admin.ModelAdmin):
 
     def curtain_count(self, obj):
         return obj.curtains.count()
-    curtain_count.short_description = 'Curtains'
+    curtain_count.short_description = 'Total'
+
+    def enabled_curtain_count(self, obj):
+        enabled = obj.curtains.filter(enable=True).count()
+        total = obj.curtains.count()
+        return f"{enabled}/{total}"
+    enabled_curtain_count.short_description = 'Enabled'
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related('owner').prefetch_related('curtains')
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('<int:collection_id>/manage-curtains/', self.admin_site.admin_view(self.manage_curtains_view), name='curtain_curtaincollection_manage_curtains'),
+        ]
+        return custom_urls + urls
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_manage_curtains'] = True
+        extra_context['collection_id'] = object_id
+        return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+    def manage_curtains_view(self, request, collection_id):
+        collection = CurtainCollection.objects.get(pk=collection_id)
+        curtains = collection.curtains.all().order_by('-created')
+
+        if request.method == 'POST':
+            curtain_id = request.POST.get('curtain_id')
+            action = request.POST.get('action')
+            if curtain_id and action:
+                curtain = Curtain.objects.get(pk=curtain_id)
+                if action == 'enable':
+                    curtain.enable = True
+                elif action == 'disable':
+                    curtain.enable = False
+                curtain.save()
+                self.message_user(request, f"Curtain {curtain.link_id[:8]}... {'enabled' if curtain.enable else 'disabled'}.")
+            return redirect('admin:curtain_curtaincollection_manage_curtains', collection_id=collection_id)
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Manage Curtains in "{collection.name}"',
+            'collection': collection,
+            'curtains': curtains,
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/curtain/manage_collection_curtains.html', context)
+
+    def enable_all_curtains(self, request, queryset):
+        count = 0
+        for collection in queryset:
+            updated = collection.curtains.update(enable=True)
+            count += updated
+        self.message_user(request, f"Enabled {count} curtain(s) across {queryset.count()} collection(s).")
+    enable_all_curtains.short_description = "Enable all curtains in selected collections"
+
+    def disable_all_curtains(self, request, queryset):
+        count = 0
+        for collection in queryset:
+            updated = collection.curtains.update(enable=False)
+            count += updated
+        self.message_user(request, f"Disabled {count} curtain(s) across {queryset.count()} collection(s).")
+    disable_all_curtains.short_description = "Disable all curtains in selected collections"
+
+    def enable_collection(self, request, queryset):
+        count = queryset.update(enable=True)
+        self.message_user(request, f"Enabled {count} collection(s).")
+    enable_collection.short_description = "Enable selected collections"
+
+    def disable_collection(self, request, queryset):
+        count = queryset.update(enable=False)
+        self.message_user(request, f"Disabled {count} collection(s).")
+    disable_collection.short_description = "Disable selected collections"
 
