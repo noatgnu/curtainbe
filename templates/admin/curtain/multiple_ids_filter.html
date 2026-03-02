@@ -1,0 +1,24 @@
+{% load i18n %}
+<h3>{% trans "By multiple link IDs" %}</h3>
+<form method="get" style="padding: 8px;">
+    <div style="margin-bottom: 8px;">
+        <textarea
+            name="link_ids"
+            rows="4"
+            style="width: 100%; box-sizing: border-box; font-family: monospace; font-size: 11px;"
+            placeholder="Enter link IDs (comma, space, or newline separated)">{{ spec.value }}</textarea>
+    </div>
+    <div>
+        <input type="submit" value="{% trans 'Filter' %}" style="width: 100%;">
+    </div>
+    {% for key, value in request.GET.items %}
+        {% if key != 'link_ids' %}
+            <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {% endif %}
+    {% endfor %}
+</form>
+{% if spec.value %}
+<div style="padding: 8px;">
+    <a href="?{% for key, value in request.GET.items %}{% if key != 'link_ids' %}{{ key }}={{ value }}&{% endif %}{% endfor %}">{% trans "Clear" %}</a>
+</div>
+{% endif %}
