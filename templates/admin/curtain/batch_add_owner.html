@@ -1,0 +1,28 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<p>You are about to add a user as owner to the following {{ curtains.count }} curtain(s):</p>
+
+<ul style="max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 20px;">
+{% for curtain in curtains %}
+    <li><strong>{{ curtain.link_id|truncatechars:12 }}</strong> - {{ curtain.description|truncatechars:50 }}</li>
+{% endfor %}
+</ul>
+
+<form method="post">
+{% csrf_token %}
+<fieldset class="module aligned">
+    <div class="form-row">
+        {{ form.as_p }}
+    </div>
+</fieldset>
+
+<div class="submit-row">
+    <input type="submit" value="Add Owner" class="default">
+    <a href="{% url 'admin:curtain_curtain_changelist' %}" class="button cancel-link">Cancel</a>
+</div>
+</form>
+{% endblock %}

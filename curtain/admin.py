@@ -22,6 +22,27 @@ from .models import (
 from django.conf import settings
 
 
+class BatchAddOwnerForm(forms.Form):
+    user = forms.ModelChoiceField(
+        queryset=User.objects.all(),
+        label="Select User",
+        help_text="Select a user to add as owner to all selected curtains"
+    )
+
+
+class BatchAddToCollectionForm(forms.Form):
+    collection = forms.ModelChoiceField(
+        queryset=None,
+        label="Select Collection",
+        help_text="Select a collection to add the selected curtains to"
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .models import CurtainCollection
+        self.fields['collection'].queryset = CurtainCollection.objects.all()
+
+
 class ExtraPropertiesInline(admin.StackedInline):
     model = ExtraProperties
     can_delete = False
@@ -146,6 +167,7 @@ class CurtainAdmin(admin.ModelAdmin):
     filter_horizontal = ('owners',)
     date_hierarchy = 'created'
     list_per_page = 20
+    actions = ['batch_add_owner', 'batch_add_to_collection']
 
     fieldsets = (
         ('Basic Information', {
@@ -195,6 +217,78 @@ class CurtainAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.prefetch_related('owners', 'last_access')
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('batch-add-owner/', self.admin_site.admin_view(self.batch_add_owner_view), name='curtain_batch_add_owner'),
+            path('batch-add-to-collection/', self.admin_site.admin_view(self.batch_add_to_collection_view), name='curtain_batch_add_to_collection'),
+        ]
+        return custom_urls + urls
+
+    def batch_add_owner(self, request, queryset):
+        selected = queryset.values_list('pk', flat=True)
+        return redirect(f"{reverse('admin:curtain_batch_add_owner')}?ids={','.join(str(pk) for pk in selected)}")
+    batch_add_owner.short_description = "Add owner to selected curtains"
+
+    def batch_add_owner_view(self, request):
+        ids = request.GET.get('ids', '').split(',')
+        curtains = Curtain.objects.filter(pk__in=ids)
+
+        if request.method == 'POST':
+            form = BatchAddOwnerForm(request.POST)
+            if form.is_valid():
+                user = form.cleaned_data['user']
+                count = 0
+                for curtain in curtains:
+                    if user not in curtain.owners.all():
+                        curtain.owners.add(user)
+                        count += 1
+                self.message_user(request, f"Added {user.username} as owner to {count} curtain(s).")
+                return redirect('admin:curtain_curtain_changelist')
+        else:
+            form = BatchAddOwnerForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Batch Add Owner',
+            'form': form,
+            'curtains': curtains,
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/curtain/batch_add_owner.html', context)
+
+    def batch_add_to_collection(self, request, queryset):
+        selected = queryset.values_list('pk', flat=True)
+        return redirect(f"{reverse('admin:curtain_batch_add_to_collection')}?ids={','.join(str(pk) for pk in selected)}")
+    batch_add_to_collection.short_description = "Add selected curtains to collection"
+
+    def batch_add_to_collection_view(self, request):
+        ids = request.GET.get('ids', '').split(',')
+        curtains = Curtain.objects.filter(pk__in=ids)
+
+        if request.method == 'POST':
+            form = BatchAddToCollectionForm(request.POST)
+            if form.is_valid():
+                collection = form.cleaned_data['collection']
+                count = 0
+                for curtain in curtains:
+                    if curtain not in collection.curtains.all():
+                        collection.curtains.add(curtain)
+                        count += 1
+                self.message_user(request, f"Added {count} curtain(s) to collection '{collection.name}'.")
+                return redirect('admin:curtain_curtain_changelist')
+        else:
+            form = BatchAddToCollectionForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Batch Add to Collection',
+            'form': form,
+            'curtains': curtains,
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/curtain/batch_add_to_collection.html', context)
 
 
 @admin.register(ExtraProperties)
