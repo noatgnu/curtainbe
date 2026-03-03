@@ -480,12 +480,6 @@ class CurtainAdmin(admin.ModelAdmin):
         return '-'
     name_display.short_description = 'Name'
 
-    def enable_toggle(self, obj):
-        if obj.enable:
-            return format_html('<span style="color: green;">&#10003;</span>')
-        return format_html('<span style="color: red;">&#10007;</span>')
-    enable_toggle.short_description = 'Enabled'
-
     def permanent_badge(self, obj):
         if obj.permanent:
             return format_html('<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px;">Permanent</span>')
