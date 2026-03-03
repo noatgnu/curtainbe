@@ -338,7 +338,7 @@ class LastAccessInline(admin.TabularInline):
 
 @admin.register(Curtain)
 class CurtainAdmin(admin.ModelAdmin):
-    list_display = ('link_id_short', 'name_display', 'curtain_type', 'created', 'last_access_display', 'owner_list', 'enable_toggle', 'permanent_badge', 'expired_status', 'encrypted', 'quick_actions')
+    list_display = ('link_id_short', 'name_display', 'curtain_type', 'created', 'last_access_display', 'owner_list', 'enable', 'permanent_badge', 'expired_status', 'encrypted', 'quick_actions')
     list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', ExpiredStatusFilter, ExpiringSoonFilter, LastAccessFilter, OwnerCountFilter, MultipleIDsFilter, 'created', 'updated')
     search_fields = ('link_id', 'name', 'description', 'owners__username')
     readonly_fields = ('created', 'updated', 'link_id', 'expired_status', 'last_access_display')
