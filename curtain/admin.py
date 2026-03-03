@@ -10,7 +10,7 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 from django.contrib.sites.shortcuts import get_current_site
-from django.db import transaction
+from django.db import models, transaction
 
 from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, ContributorForm, DescriptionForm, \
     RightsForm, AlternateIdentifierForm, RelatedIdentifierForm, FundingReferenceForm
@@ -82,17 +82,29 @@ class UserPublicKeyInline(admin.TabularInline):
 
 class CustomUserAdmin(BaseUserAdmin):
     inlines = (ExtraPropertiesInline, UserAPIKeyInline, UserPublicKeyInline)
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active', 'date_joined', 'curtain_count')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active', 'date_joined', 'curtain_count_link', 'collection_count_link')
     list_filter = ('is_staff', 'is_superuser', 'is_active', 'date_joined')
     search_fields = ('username', 'email', 'first_name', 'last_name')
 
-    def curtain_count(self, obj):
-        return obj.curtain.count()
-    curtain_count.short_description = 'Curtains'
+    def curtain_count_link(self, obj):
+        count = obj.curtain.count()
+        if count > 0:
+            url = reverse('admin:curtain_curtain_changelist') + f'?owners__id__exact={obj.id}'
+            return format_html('<a href="{}">{} curtain(s)</a>', url, count)
+        return '0'
+    curtain_count_link.short_description = 'Curtains'
+
+    def collection_count_link(self, obj):
+        count = obj.curtain_collections.count()
+        if count > 0:
+            url = reverse('admin:curtain_curtaincollection_changelist') + f'?owner__id__exact={obj.id}'
+            return format_html('<a href="{}">{} collection(s)</a>', url, count)
+        return '0'
+    collection_count_link.short_description = 'Collections'
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.prefetch_related('curtain')
+        return qs.prefetch_related('curtain', 'curtain_collections')
 
 
 admin.site.unregister(User)
@@ -102,6 +114,53 @@ admin.site.register(User, CustomUserAdmin)
 admin.site.site_header = 'CurtainBE Administration'
 admin.site.site_title = 'CurtainBE Admin'
 admin.site.index_title = 'Welcome to CurtainBE Administration'
+
+
+def admin_dashboard(request):
+    from django.utils import timezone
+    from datetime import timedelta
+
+    total_curtains = Curtain.objects.count()
+    total_users = User.objects.count()
+    total_collections = CurtainCollection.objects.count()
+
+    permanent_count = Curtain.objects.filter(permanent=True).count()
+    enabled_count = Curtain.objects.filter(enable=True).count()
+    expired_count = sum(1 for c in Curtain.objects.filter(permanent=False) if c.is_expired)
+
+    pending_requests = PermanentLinkRequest.objects.filter(status='pending').count()
+    pending_datacite = DataCite.objects.filter(status='pending').count()
+
+    week_ago = timezone.now() - timedelta(days=7)
+    month_ago = timezone.now() - timedelta(days=30)
+
+    new_curtains_week = Curtain.objects.filter(created__gte=week_ago).count()
+    new_curtains_month = Curtain.objects.filter(created__gte=month_ago).count()
+    new_users_week = User.objects.filter(date_joined__gte=week_ago).count()
+    new_users_month = User.objects.filter(date_joined__gte=month_ago).count()
+
+    recent_curtains = Curtain.objects.order_by('-created')[:10]
+    recent_requests = PermanentLinkRequest.objects.filter(status='pending').order_by('-requested_at')[:5]
+
+    context = {
+        **admin.site.each_context(request),
+        'title': 'Dashboard',
+        'total_curtains': total_curtains,
+        'total_users': total_users,
+        'total_collections': total_collections,
+        'permanent_count': permanent_count,
+        'enabled_count': enabled_count,
+        'expired_count': expired_count,
+        'pending_requests': pending_requests,
+        'pending_datacite': pending_datacite,
+        'new_curtains_week': new_curtains_week,
+        'new_curtains_month': new_curtains_month,
+        'new_users_week': new_users_week,
+        'new_users_month': new_users_month,
+        'recent_curtains': recent_curtains,
+        'recent_requests': recent_requests,
+    }
+    return render(request, 'admin/dashboard.html', context)
 
 
 class ExpiredStatusFilter(admin.SimpleListFilter):
@@ -159,6 +218,95 @@ class MultipleIDsFilter(admin.SimpleListFilter):
         }
 
 
+class ExpiringSoonFilter(admin.SimpleListFilter):
+    """
+    Filter for curtains expiring within specified days
+    """
+    title = 'expiring soon'
+    parameter_name = 'expiring_soon'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('7', 'Within 7 days'),
+            ('14', 'Within 14 days'),
+            ('30', 'Within 30 days'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            from datetime import timedelta
+            from django.utils import timezone
+            days = int(self.value())
+            threshold = timezone.now() + timedelta(days=days)
+            expiring_ids = []
+            for c in queryset.filter(permanent=False):
+                if not c.is_expired:
+                    expiry_date = c.created + c.expiry_duration
+                    if expiry_date <= threshold:
+                        expiring_ids.append(c.id)
+            return queryset.filter(id__in=expiring_ids)
+        return queryset
+
+
+class LastAccessFilter(admin.SimpleListFilter):
+    """
+    Filter for curtains by last access time
+    """
+    title = 'last access'
+    parameter_name = 'last_access_days'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('never', 'Never accessed'),
+            ('7', 'No access in 7 days'),
+            ('30', 'No access in 30 days'),
+            ('90', 'No access in 90 days'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            from datetime import timedelta
+            from django.utils import timezone
+
+            if self.value() == 'never':
+                curtains_with_access = LastAccess.objects.values_list('curtain_id', flat=True).distinct()
+                return queryset.exclude(id__in=curtains_with_access)
+            else:
+                days = int(self.value())
+                threshold = timezone.now() - timedelta(days=days)
+                old_access_ids = []
+                for c in queryset:
+                    last_access = c.last_access.order_by('-last_access').first()
+                    if not last_access or last_access.last_access < threshold:
+                        old_access_ids.append(c.id)
+                return queryset.filter(id__in=old_access_ids)
+        return queryset
+
+
+class OwnerCountFilter(admin.SimpleListFilter):
+    """
+    Filter by number of owners
+    """
+    title = 'owner count'
+    parameter_name = 'owner_count'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('0', 'No owners'),
+            ('1', 'Single owner'),
+            ('2+', 'Multiple owners'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == '0':
+            return queryset.annotate(num_owners=models.Count('owners')).filter(num_owners=0)
+        elif self.value() == '1':
+            return queryset.annotate(num_owners=models.Count('owners')).filter(num_owners=1)
+        elif self.value() == '2+':
+            return queryset.annotate(num_owners=models.Count('owners')).filter(num_owners__gte=2)
+        return queryset
+
+
 class DataAESEncryptionFactorsInline(admin.TabularInline):
     model = DataAESEncryptionFactors
     extra = 0
@@ -190,14 +338,21 @@ class LastAccessInline(admin.TabularInline):
 
 @admin.register(Curtain)
 class CurtainAdmin(admin.ModelAdmin):
-    list_display = ('link_id_short', 'curtain_type', 'created', 'last_access_display', 'owner_list', 'enable', 'permanent', 'expired_status', 'encrypted')
-    list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', ExpiredStatusFilter, MultipleIDsFilter, 'created', 'updated')
-    search_fields = ('link_id', 'description', 'owners__username')
+    list_display = ('link_id_short', 'name_display', 'curtain_type', 'created', 'last_access_display', 'owner_list', 'enable_toggle', 'permanent_badge', 'expired_status', 'encrypted', 'quick_actions')
+    list_filter = ('curtain_type', 'enable', 'permanent', 'encrypted', ExpiredStatusFilter, ExpiringSoonFilter, LastAccessFilter, OwnerCountFilter, MultipleIDsFilter, 'created', 'updated')
+    search_fields = ('link_id', 'name', 'description', 'owners__username')
     readonly_fields = ('created', 'updated', 'link_id', 'expired_status', 'last_access_display')
     autocomplete_fields = ('owners',)
     date_hierarchy = 'created'
     list_per_page = 20
-    actions = ['batch_add_owner', 'batch_add_to_collection']
+    list_editable = ('enable',)
+    actions = [
+        'batch_add_owner', 'batch_add_to_collection',
+        'enable_selected', 'disable_selected',
+        'make_permanent', 'extend_expiry_3_months', 'extend_expiry_6_months',
+        'delete_expired_sessions', 'export_to_csv',
+        'duplicate_curtain',
+    ]
 
     fieldsets = (
         ('Basic Information', {
@@ -222,9 +377,16 @@ class CurtainAdmin(admin.ModelAdmin):
     link_id_short.short_description = 'Link ID'
 
     def owner_list(self, obj):
-        owners = obj.owners.all()
+        owners = obj.owners.all()[:3]
         if owners:
-            return ', '.join([owner.username for owner in owners[:3]])
+            links = []
+            for owner in owners:
+                url = reverse('admin:auth_user_change', args=[owner.id])
+                links.append(f'<a href="{url}">{owner.username}</a>')
+            result = ', '.join(links)
+            if obj.owners.count() > 3:
+                result += f' (+{obj.owners.count() - 3})'
+            return format_html(result)
         return 'None'
     owner_list.short_description = 'Owners'
 
@@ -247,14 +409,6 @@ class CurtainAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.prefetch_related('owners', 'last_access')
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('batch-add-owner/', self.admin_site.admin_view(self.batch_add_owner_view), name='curtain_curtain_batch_add_owner'),
-            path('batch-add-to-collection/', self.admin_site.admin_view(self.batch_add_to_collection_view), name='curtain_curtain_batch_add_to_collection'),
-        ]
-        return custom_urls + urls
 
     def batch_add_owner(self, request, queryset):
         selected = queryset.values_list('pk', flat=True)
@@ -319,6 +473,258 @@ class CurtainAdmin(admin.ModelAdmin):
             'opts': self.model._meta,
         }
         return render(request, 'admin/curtain/batch_add_to_collection.html', context)
+
+    def name_display(self, obj):
+        if obj.name:
+            return obj.name[:30] + '...' if len(obj.name) > 30 else obj.name
+        return '-'
+    name_display.short_description = 'Name'
+
+    def enable_toggle(self, obj):
+        if obj.enable:
+            return format_html('<span style="color: green;">&#10003;</span>')
+        return format_html('<span style="color: red;">&#10007;</span>')
+    enable_toggle.short_description = 'Enabled'
+
+    def permanent_badge(self, obj):
+        if obj.permanent:
+            return format_html('<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px;">Permanent</span>')
+        return format_html('<span style="background: #6c757d; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px;">Temporary</span>')
+    permanent_badge.short_description = 'Type'
+
+    def quick_actions(self, obj):
+        actions = []
+        if not obj.permanent:
+            actions.append(f'<a href="{reverse("admin:curtain_curtain_quick_action")}?id={obj.pk}&action=make_permanent" title="Make Permanent" style="margin-right:5px;">&#9733;</a>')
+        if obj.enable:
+            actions.append(f'<a href="{reverse("admin:curtain_curtain_quick_action")}?id={obj.pk}&action=disable" title="Disable" style="color:red;">&#10007;</a>')
+        else:
+            actions.append(f'<a href="{reverse("admin:curtain_curtain_quick_action")}?id={obj.pk}&action=enable" title="Enable" style="color:green;">&#10003;</a>')
+        return format_html(' '.join(actions))
+    quick_actions.short_description = 'Actions'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('batch-add-owner/', self.admin_site.admin_view(self.batch_add_owner_view), name='curtain_curtain_batch_add_owner'),
+            path('batch-add-to-collection/', self.admin_site.admin_view(self.batch_add_to_collection_view), name='curtain_curtain_batch_add_to_collection'),
+            path('quick-action/', self.admin_site.admin_view(self.quick_action_view), name='curtain_curtain_quick_action'),
+            path('export-csv/', self.admin_site.admin_view(self.export_csv_view), name='curtain_curtain_export_csv'),
+            path('maintenance/', self.admin_site.admin_view(self.maintenance_view), name='curtain_curtain_maintenance'),
+            path('duplicate/', self.admin_site.admin_view(self.duplicate_curtain_view), name='curtain_curtain_duplicate'),
+        ]
+        return custom_urls + urls
+
+    def quick_action_view(self, request):
+        curtain_id = request.GET.get('id')
+        action = request.GET.get('action')
+        curtain = Curtain.objects.get(pk=curtain_id)
+
+        if action == 'enable':
+            curtain.enable = True
+            curtain.save()
+            self.message_user(request, f"Curtain {curtain.link_id[:8]}... enabled.")
+        elif action == 'disable':
+            curtain.enable = False
+            curtain.save()
+            self.message_user(request, f"Curtain {curtain.link_id[:8]}... disabled.")
+        elif action == 'make_permanent':
+            curtain.permanent = True
+            curtain.save()
+            self.message_user(request, f"Curtain {curtain.link_id[:8]}... made permanent.")
+
+        return redirect('admin:curtain_curtain_changelist')
+
+    def enable_selected(self, request, queryset):
+        count = queryset.update(enable=True)
+        self.message_user(request, f"Enabled {count} curtain(s).")
+    enable_selected.short_description = "Enable selected curtains"
+
+    def disable_selected(self, request, queryset):
+        count = queryset.update(enable=False)
+        self.message_user(request, f"Disabled {count} curtain(s).")
+    disable_selected.short_description = "Disable selected curtains"
+
+    def make_permanent(self, request, queryset):
+        count = queryset.update(permanent=True)
+        self.message_user(request, f"Made {count} curtain(s) permanent.")
+    make_permanent.short_description = "Make selected curtains permanent"
+
+    def extend_expiry_3_months(self, request, queryset):
+        from datetime import timedelta
+        count = 0
+        for curtain in queryset.filter(permanent=False):
+            curtain.expiry_duration = timedelta(days=90)
+            curtain.save()
+            count += 1
+        self.message_user(request, f"Extended expiry to 3 months for {count} curtain(s).")
+    extend_expiry_3_months.short_description = "Extend expiry to 3 months"
+
+    def extend_expiry_6_months(self, request, queryset):
+        from datetime import timedelta
+        count = 0
+        for curtain in queryset.filter(permanent=False):
+            curtain.expiry_duration = timedelta(days=180)
+            curtain.save()
+            count += 1
+        self.message_user(request, f"Extended expiry to 6 months for {count} curtain(s).")
+    extend_expiry_6_months.short_description = "Extend expiry to 6 months"
+
+    def delete_expired_sessions(self, request, queryset):
+        count = 0
+        for curtain in queryset:
+            if curtain.is_expired:
+                curtain.delete()
+                count += 1
+        self.message_user(request, f"Deleted {count} expired curtain(s).")
+    delete_expired_sessions.short_description = "Delete expired sessions (from selection)"
+
+    def export_to_csv(self, request, queryset):
+        import csv
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="curtains_export.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Link ID', 'Name', 'Type', 'Created', 'Enable', 'Permanent', 'Expired', 'Owners', 'Description'])
+        for curtain in queryset:
+            owners = ', '.join([o.username for o in curtain.owners.all()])
+            writer.writerow([
+                curtain.link_id,
+                curtain.name,
+                curtain.curtain_type,
+                curtain.created.strftime('%Y-%m-%d %H:%M:%S'),
+                curtain.enable,
+                curtain.permanent,
+                curtain.is_expired,
+                owners,
+                curtain.description[:100] if curtain.description else ''
+            ])
+        return response
+    export_to_csv.short_description = "Export selected to CSV"
+
+    def duplicate_curtain(self, request, queryset):
+        selected = queryset.values_list('pk', flat=True)
+        return redirect(f"{reverse('admin:curtain_curtain_duplicate')}?ids={','.join(str(pk) for pk in selected)}")
+    duplicate_curtain.short_description = "Duplicate selected curtains (settings only)"
+
+    def export_csv_view(self, request):
+        import csv
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="all_curtains_export.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Link ID', 'Name', 'Type', 'Created', 'Enable', 'Permanent', 'Expired', 'Owners', 'Description'])
+        for curtain in Curtain.objects.all().prefetch_related('owners'):
+            owners = ', '.join([o.username for o in curtain.owners.all()])
+            writer.writerow([
+                curtain.link_id,
+                curtain.name,
+                curtain.curtain_type,
+                curtain.created.strftime('%Y-%m-%d %H:%M:%S'),
+                curtain.enable,
+                curtain.permanent,
+                curtain.is_expired,
+                owners,
+                curtain.description[:100] if curtain.description else ''
+            ])
+        return response
+
+    def maintenance_view(self, request):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        if request.method == 'POST':
+            action = request.POST.get('action')
+            if action == 'delete_expired':
+                count = 0
+                for curtain in Curtain.objects.filter(permanent=False):
+                    if curtain.is_expired:
+                        curtain.delete()
+                        count += 1
+                self.message_user(request, f"Deleted {count} expired curtain(s).")
+            elif action == 'delete_no_access_30':
+                threshold = timezone.now() - timedelta(days=30)
+                count = 0
+                for curtain in Curtain.objects.filter(permanent=False):
+                    last_access = curtain.last_access.order_by('-last_access').first()
+                    if not last_access or last_access.last_access < threshold:
+                        curtain.delete()
+                        count += 1
+                self.message_user(request, f"Deleted {count} curtain(s) with no access in 30 days.")
+            elif action == 'delete_no_access_90':
+                threshold = timezone.now() - timedelta(days=90)
+                count = 0
+                for curtain in Curtain.objects.filter(permanent=False):
+                    last_access = curtain.last_access.order_by('-last_access').first()
+                    if not last_access or last_access.last_access < threshold:
+                        curtain.delete()
+                        count += 1
+                self.message_user(request, f"Deleted {count} curtain(s) with no access in 90 days.")
+            return redirect('admin:curtain_curtain_maintenance')
+
+        total_curtains = Curtain.objects.count()
+        expired_count = sum(1 for c in Curtain.objects.filter(permanent=False) if c.is_expired)
+        permanent_count = Curtain.objects.filter(permanent=True).count()
+        enabled_count = Curtain.objects.filter(enable=True).count()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Curtain Maintenance',
+            'opts': self.model._meta,
+            'total_curtains': total_curtains,
+            'expired_count': expired_count,
+            'permanent_count': permanent_count,
+            'enabled_count': enabled_count,
+        }
+        return render(request, 'admin/curtain/maintenance.html', context)
+
+    def duplicate_curtain_view(self, request):
+        import uuid
+        ids = request.GET.get('ids', '').split(',')
+        curtains = Curtain.objects.filter(pk__in=ids)
+
+        if request.method == 'POST':
+            new_owner_id = request.POST.get('new_owner')
+            copy_owners = request.POST.get('copy_owners') == 'on'
+            copy_description = request.POST.get('copy_description') == 'on'
+
+            new_owner = None
+            if new_owner_id:
+                new_owner = User.objects.get(pk=new_owner_id)
+
+            duplicated = []
+            for original in curtains:
+                new_curtain = Curtain.objects.create(
+                    link_id=str(uuid.uuid4()),
+                    name=f"Copy of {original.name}" if original.name else f"Copy of {str(original.link_id)[:8]}",
+                    curtain_type=original.curtain_type,
+                    description=original.description if copy_description else '',
+                    enable=False,
+                    permanent=False,
+                    encrypted=False,
+                    expiry_duration=original.expiry_duration,
+                )
+                if copy_owners:
+                    new_curtain.owners.set(original.owners.all())
+                if new_owner and new_owner not in new_curtain.owners.all():
+                    new_curtain.owners.add(new_owner)
+                duplicated.append(new_curtain)
+
+            self.message_user(request, f"Successfully duplicated {len(duplicated)} curtain(s). Note: Files are not copied - you need to upload new data.")
+            return redirect('admin:curtain_curtain_changelist')
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Duplicate Curtains',
+            'curtains': curtains,
+            'users': User.objects.all().order_by('username')[:100],
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/curtain/duplicate_curtain.html', context)
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_maintenance_link'] = True
+        extra_context['show_export_link'] = True
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 @admin.register(ExtraProperties)
@@ -851,7 +1257,7 @@ class CurtainCollectionAdmin(admin.ModelAdmin):
     readonly_fields = ('created', 'updated')
     autocomplete_fields = ('curtains', 'owner')
     ordering = ('-updated',)
-    actions = ['enable_all_curtains', 'disable_all_curtains', 'enable_collection', 'disable_collection']
+    actions = ['enable_all_curtains', 'disable_all_curtains', 'enable_collection', 'disable_collection', 'clone_collection']
 
     fieldsets = (
         ('Collection Information', {
@@ -885,6 +1291,7 @@ class CurtainCollectionAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('<int:collection_id>/manage-curtains/', self.admin_site.admin_view(self.manage_curtains_view), name='curtain_curtaincollection_manage_curtains'),
+            path('clone/', self.admin_site.admin_view(self.clone_collection_view), name='curtain_curtaincollection_clone'),
         ]
         return custom_urls + urls
 
@@ -945,4 +1352,46 @@ class CurtainCollectionAdmin(admin.ModelAdmin):
         count = queryset.update(enable=False)
         self.message_user(request, f"Disabled {count} collection(s).")
     disable_collection.short_description = "Disable selected collections"
+
+    def clone_collection(self, request, queryset):
+        selected = queryset.values_list('pk', flat=True)
+        return redirect(f"{reverse('admin:curtain_curtaincollection_clone')}?ids={','.join(str(pk) for pk in selected)}")
+    clone_collection.short_description = "Clone selected collections"
+
+    def clone_collection_view(self, request):
+        ids = request.GET.get('ids', '').split(',')
+        collections = CurtainCollection.objects.filter(pk__in=ids)
+
+        if request.method == 'POST':
+            new_owner_id = request.POST.get('new_owner')
+            copy_owner = request.POST.get('copy_owner') == 'on'
+            copy_curtains = request.POST.get('copy_curtains') == 'on'
+
+            new_owner = None
+            if new_owner_id:
+                new_owner = User.objects.get(pk=new_owner_id)
+
+            cloned = []
+            for original in collections:
+                new_collection = CurtainCollection.objects.create(
+                    name=f"Copy of {original.name}",
+                    description=original.description,
+                    enable=False,
+                    owner=new_owner if new_owner else (original.owner if copy_owner else None),
+                )
+                if copy_curtains:
+                    new_collection.curtains.set(original.curtains.all())
+                cloned.append(new_collection)
+
+            self.message_user(request, f"Successfully cloned {len(cloned)} collection(s).")
+            return redirect('admin:curtain_curtaincollection_changelist')
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Clone Collections',
+            'collections': collections,
+            'users': User.objects.all().order_by('username')[:100],
+            'opts': self.model._meta,
+        }
+        return render(request, 'admin/curtain/clone_collection.html', context)
 

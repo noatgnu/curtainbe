@@ -27,6 +27,7 @@ from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHVi
     DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView, \
     APIKeyView, DataCiteFileView, CustomTokenObtainPairView
 from curtain.chunked_upload import CurtainChunkedUploadView
+from curtain.admin import admin_dashboard
 from django.contrib import admin
 
 router = routers.DefaultRouter()
@@ -59,6 +60,7 @@ urlpatterns = [
     path('datacite/file/<int:datacite_id>/', DataCiteFileView.as_view(), name='datacite_file'),
     path('curtain-chunked-upload/', CurtainChunkedUploadView.as_view(), name='curtain_chunked_upload'),
     path('curtain-chunked-upload/<uuid:pk>/', CurtainChunkedUploadView.as_view(), name='curtain_chunked_upload_detail'),
+    path('admin/dashboard/', admin.site.admin_view(admin_dashboard), name='admin_dashboard'),
     path('admin/', admin.site.urls),
 ]
 

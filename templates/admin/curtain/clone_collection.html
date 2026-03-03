@@ -1,0 +1,92 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block content %}
+<h1>Clone Collections</h1>
+
+<div style="background: #d4edda; border: 1px solid #28a745; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+    <strong>Info:</strong> This will create new collection entries with the same settings.
+    You can optionally include all curtains from the original collections.
+</div>
+
+<h2>Selected Collections ({{ collections.count }})</h2>
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+    <thead>
+        <tr style="background: #f5f5f5;">
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Name</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Owner</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Curtains</th>
+            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for collection in collections %}
+        <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ collection.name }}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ collection.owner.username|default:"None" }}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ collection.curtains.count }}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">
+                {% if collection.enable %}
+                    <span style="color: green;">&#10003;</span>
+                {% else %}
+                    <span style="color: red;">&#10007;</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<form method="post" style="background: #f9f9f9; padding: 20px; border-radius: 5px;">
+    {% csrf_token %}
+
+    <h3 style="margin-top: 0;">Clone Options</h3>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Assign to New Owner (optional):</label>
+        <select name="new_owner" style="width: 300px; padding: 8px;">
+            <option value="">-- Keep original owner or none --</option>
+            {% for user in users %}
+            <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
+            {% endfor %}
+        </select>
+        <p style="color: #666; font-size: 12px; margin: 5px 0 0 0;">If selected, this user will be the owner of the cloned collections. Otherwise, it will use the original owner (if "Copy original owner" is checked) or no owner.</p>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" name="copy_owner" checked style="margin-right: 10px;">
+            <span>Copy original owner to cloned collections (if no new owner selected)</span>
+        </label>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" name="copy_curtains" checked style="margin-right: 10px;">
+            <span>Include all curtains from original collections</span>
+        </label>
+        <p style="color: #666; font-size: 12px; margin: 5px 0 0 25px;">The same curtain sessions will be associated with the cloned collections. This does not duplicate the curtains themselves.</p>
+    </div>
+
+    <h4>What will be copied:</h4>
+    <ul style="color: #666;">
+        <li>Collection name (prefixed with "Copy of")</li>
+        <li>Description</li>
+        <li>Owner (based on options above)</li>
+        <li>Curtain associations (if checked above)</li>
+    </ul>
+
+    <h4>What will NOT be copied:</h4>
+    <ul style="color: #999;">
+        <li>Enable status (new collections start as disabled)</li>
+        <li>DataCite records</li>
+    </ul>
+
+    <div style="margin-top: 20px;">
+        <button type="submit" class="button" style="background: #417690; color: white; padding: 10px 20px; font-size: 14px;">
+            Clone {{ collections.count }} Collection(s)
+        </button>
+        <a href="{% url 'admin:curtain_curtaincollection_changelist' %}" class="button" style="margin-left: 10px;">Cancel</a>
+    </div>
+</form>
+{% endblock %}

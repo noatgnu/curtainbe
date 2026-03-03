@@ -1,0 +1,20 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+{{ block.super }}
+{% if show_maintenance_link %}
+<li>
+    <a href="{% url 'admin:curtain_curtain_maintenance' %}" class="button" style="background: #417690;">
+        &#9881; Maintenance
+    </a>
+</li>
+{% endif %}
+{% if show_export_link %}
+<li>
+    <a href="{% url 'admin:curtain_curtain_export_csv' %}" class="button" style="background: #28a745;">
+        &#8681; Export All CSV
+    </a>
+</li>
+{% endif %}
+{% endblock %}
