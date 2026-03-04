@@ -2,6 +2,7 @@ from datacite import DataCiteRESTClient
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
+from request.models import Request
 from django import forms
 from django.forms import formset_factory
 from django.utils.html import format_html
@@ -874,12 +875,106 @@ class LastAccessAdmin(admin.ModelAdmin):
     readonly_fields = ('last_access',)
     autocomplete_fields = ('curtain',)
     date_hierarchy = 'last_access'
+    actions = ['purge_keep_latest', 'purge_older_than_30_days', 'purge_older_than_90_days', 'purge_older_than_365_days']
 
     def curtain_link(self, obj):
         if obj.curtain:
             return str(obj.curtain.link_id)[:8] + '...'
         return 'N/A'
     curtain_link.short_description = 'Curtain'
+
+    def purge_keep_latest(self, request, queryset):
+        from django.db.models import Max
+        latest_per_curtain = LastAccess.objects.values('curtain').annotate(latest_id=Max('id')).values_list('latest_id', flat=True)
+        count, _ = LastAccess.objects.exclude(id__in=list(latest_per_curtain)).delete()
+        self.message_user(request, f"Purged {count} old access record(s), keeping only the latest for each curtain.")
+    purge_keep_latest.short_description = "Purge all except latest per curtain"
+
+    def purge_older_than_30_days(self, request, queryset):
+        from datetime import timedelta
+        from django.utils import timezone
+        threshold = timezone.now() - timedelta(days=30)
+        count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
+        self.message_user(request, f"Purged {count} access record(s) older than 30 days.")
+    purge_older_than_30_days.short_description = "Purge records older than 30 days"
+
+    def purge_older_than_90_days(self, request, queryset):
+        from datetime import timedelta
+        from django.utils import timezone
+        threshold = timezone.now() - timedelta(days=90)
+        count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
+        self.message_user(request, f"Purged {count} access record(s) older than 90 days.")
+    purge_older_than_90_days.short_description = "Purge records older than 90 days"
+
+    def purge_older_than_365_days(self, request, queryset):
+        from datetime import timedelta
+        from django.utils import timezone
+        threshold = timezone.now() - timedelta(days=365)
+        count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
+        self.message_user(request, f"Purged {count} access record(s) older than 1 year.")
+    purge_older_than_365_days.short_description = "Purge records older than 1 year"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('purge/', self.admin_site.admin_view(self.purge_view), name='curtain_lastaccess_purge'),
+        ]
+        return custom_urls + urls
+
+    def purge_view(self, request):
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models import Max, Count
+
+        if request.method == 'POST':
+            action = request.POST.get('action')
+            if action == 'purge_keep_latest':
+                latest_per_curtain = LastAccess.objects.values('curtain').annotate(latest_id=Max('id')).values_list('latest_id', flat=True)
+                count, _ = LastAccess.objects.exclude(id__in=list(latest_per_curtain)).delete()
+                self.message_user(request, f"Purged {count} old access record(s), keeping only the latest for each curtain.")
+            elif action == 'purge_30':
+                threshold = timezone.now() - timedelta(days=30)
+                count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
+                self.message_user(request, f"Purged {count} access record(s) older than 30 days.")
+            elif action == 'purge_90':
+                threshold = timezone.now() - timedelta(days=90)
+                count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
+                self.message_user(request, f"Purged {count} access record(s) older than 90 days.")
+            elif action == 'purge_365':
+                threshold = timezone.now() - timedelta(days=365)
+                count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
+                self.message_user(request, f"Purged {count} access record(s) older than 1 year.")
+            return redirect('admin:curtain_lastaccess_changelist')
+
+        total_records = LastAccess.objects.count()
+        curtains_with_access = LastAccess.objects.values('curtain').distinct().count()
+        duplicate_count = total_records - curtains_with_access
+
+        month_ago = timezone.now() - timedelta(days=30)
+        quarter_ago = timezone.now() - timedelta(days=90)
+        year_ago = timezone.now() - timedelta(days=365)
+
+        older_than_30 = LastAccess.objects.filter(last_access__lt=month_ago).count()
+        older_than_90 = LastAccess.objects.filter(last_access__lt=quarter_ago).count()
+        older_than_365 = LastAccess.objects.filter(last_access__lt=year_ago).count()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Purge Last Access Records',
+            'opts': LastAccess._meta,
+            'total_records': total_records,
+            'curtains_with_access': curtains_with_access,
+            'duplicate_count': duplicate_count,
+            'older_than_30': older_than_30,
+            'older_than_90': older_than_90,
+            'older_than_365': older_than_365,
+        }
+        return render(request, 'admin/curtain/purge_last_access.html', context)
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_purge_link'] = True
+        return super().changelist_view(request, extra_context=extra_context)
 
 class DataCiteAdmin(admin.ModelAdmin):
     list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'has_local_file', 'lock', 'created', 'updated')
@@ -1388,4 +1483,130 @@ class CurtainCollectionAdmin(admin.ModelAdmin):
             'opts': self.model._meta,
         }
         return render(request, 'admin/curtain/clone_collection.html', context)
+
+
+class RequestAdmin(admin.ModelAdmin):
+    list_display = ('time', 'path', 'method', 'response', 'user', 'ip', 'referer_display')
+    list_filter = ('method', 'response', 'is_ajax', 'is_secure', 'time')
+    search_fields = ('path', 'ip', 'user__username', 'referer')
+    readonly_fields = ('time', 'path', 'method', 'response', 'user', 'ip', 'referer', 'user_agent', 'language', 'is_ajax', 'is_secure')
+    date_hierarchy = 'time'
+    list_per_page = 50
+    ordering = ('-time',)
+    actions = ['purge_older_than_7_days', 'purge_older_than_30_days', 'purge_older_than_90_days', 'purge_older_than_365_days', 'purge_all_logs']
+
+    def referer_display(self, obj):
+        if obj.referer:
+            return obj.referer[:50] + '...' if len(obj.referer) > 50 else obj.referer
+        return '-'
+    referer_display.short_description = 'Referer'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def purge_older_than_7_days(self, request, queryset):
+        from datetime import timedelta
+        from django.utils import timezone
+        threshold = timezone.now() - timedelta(days=7)
+        count, _ = Request.objects.filter(time__lt=threshold).delete()
+        self.message_user(request, f"Purged {count} request log(s) older than 7 days.")
+    purge_older_than_7_days.short_description = "Purge logs older than 7 days (all, not just selected)"
+
+    def purge_older_than_30_days(self, request, queryset):
+        from datetime import timedelta
+        from django.utils import timezone
+        threshold = timezone.now() - timedelta(days=30)
+        count, _ = Request.objects.filter(time__lt=threshold).delete()
+        self.message_user(request, f"Purged {count} request log(s) older than 30 days.")
+    purge_older_than_30_days.short_description = "Purge logs older than 30 days (all, not just selected)"
+
+    def purge_older_than_90_days(self, request, queryset):
+        from datetime import timedelta
+        from django.utils import timezone
+        threshold = timezone.now() - timedelta(days=90)
+        count, _ = Request.objects.filter(time__lt=threshold).delete()
+        self.message_user(request, f"Purged {count} request log(s) older than 90 days.")
+    purge_older_than_90_days.short_description = "Purge logs older than 90 days (all, not just selected)"
+
+    def purge_older_than_365_days(self, request, queryset):
+        from datetime import timedelta
+        from django.utils import timezone
+        threshold = timezone.now() - timedelta(days=365)
+        count, _ = Request.objects.filter(time__lt=threshold).delete()
+        self.message_user(request, f"Purged {count} request log(s) older than 1 year.")
+    purge_older_than_365_days.short_description = "Purge logs older than 1 year (all, not just selected)"
+
+    def purge_all_logs(self, request, queryset):
+        count, _ = Request.objects.all().delete()
+        self.message_user(request, f"Purged all {count} request log(s).")
+    purge_all_logs.short_description = "Purge ALL request logs"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('purge/', self.admin_site.admin_view(self.purge_view), name='request_request_purge'),
+        ]
+        return custom_urls + urls
+
+    def purge_view(self, request):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        if request.method == 'POST':
+            action = request.POST.get('action')
+            if action == 'purge_7':
+                threshold = timezone.now() - timedelta(days=7)
+                count, _ = Request.objects.filter(time__lt=threshold).delete()
+                self.message_user(request, f"Purged {count} request log(s) older than 7 days.")
+            elif action == 'purge_30':
+                threshold = timezone.now() - timedelta(days=30)
+                count, _ = Request.objects.filter(time__lt=threshold).delete()
+                self.message_user(request, f"Purged {count} request log(s) older than 30 days.")
+            elif action == 'purge_90':
+                threshold = timezone.now() - timedelta(days=90)
+                count, _ = Request.objects.filter(time__lt=threshold).delete()
+                self.message_user(request, f"Purged {count} request log(s) older than 90 days.")
+            elif action == 'purge_365':
+                threshold = timezone.now() - timedelta(days=365)
+                count, _ = Request.objects.filter(time__lt=threshold).delete()
+                self.message_user(request, f"Purged {count} request log(s) older than 1 year.")
+            elif action == 'purge_all':
+                count, _ = Request.objects.all().delete()
+                self.message_user(request, f"Purged all {count} request log(s).")
+            return redirect('admin:request_request_changelist')
+
+        total_logs = Request.objects.count()
+        week_ago = timezone.now() - timedelta(days=7)
+        month_ago = timezone.now() - timedelta(days=30)
+        quarter_ago = timezone.now() - timedelta(days=90)
+        year_ago = timezone.now() - timedelta(days=365)
+
+        older_than_7 = Request.objects.filter(time__lt=week_ago).count()
+        older_than_30 = Request.objects.filter(time__lt=month_ago).count()
+        older_than_90 = Request.objects.filter(time__lt=quarter_ago).count()
+        older_than_365 = Request.objects.filter(time__lt=year_ago).count()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Purge Request Logs',
+            'opts': Request._meta,
+            'total_logs': total_logs,
+            'older_than_7': older_than_7,
+            'older_than_30': older_than_30,
+            'older_than_90': older_than_90,
+            'older_than_365': older_than_365,
+        }
+        return render(request, 'admin/request/purge_logs.html', context)
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_purge_link'] = True
+        return super().changelist_view(request, extra_context=extra_context)
+
+
+admin.site.unregister(Request)
+admin.site.register(Request, RequestAdmin)
 
