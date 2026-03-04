@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "whitenoise.runserver_nostatic",
     'django.contrib.staticfiles',
     'channels',
+    'request',
     'curtain.apps.CurtainConfig',
     'corsheaders',
     'rest_framework',
@@ -49,7 +50,6 @@ INSTALLED_APPS = [
     'django_filters',
     'dbbackup',
     'storages',
-    'request',
     'django_rq',
     'django_extensions',
     'drf_chunked_upload'

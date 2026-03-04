@@ -1,5 +1,6 @@
 from datacite import DataCiteRESTClient
 from django.contrib import admin
+from django.contrib.admin.exceptions import NotRegistered
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from request.models import Request
@@ -108,7 +109,10 @@ class CustomUserAdmin(BaseUserAdmin):
         return qs.prefetch_related('curtain', 'curtain_collections')
 
 
-admin.site.unregister(User)
+try:
+    admin.site.unregister(User)
+except NotRegistered:
+    pass
 admin.site.register(User, CustomUserAdmin)
 
 
@@ -1607,6 +1611,9 @@ class RequestAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
 
-admin.site.unregister(Request)
+try:
+    admin.site.unregister(Request)
+except NotRegistered:
+    pass
 admin.site.register(Request, RequestAdmin)
 
