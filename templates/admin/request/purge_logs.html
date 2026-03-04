@@ -1,78 +1,154 @@
 {% extends "admin/base_site.html" %}
 {% load i18n admin_urls %}
 
-{% block content %}
-<h1>Purge Request Logs</h1>
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .purge-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .purge-stat-card {
+        background: var(--darkened-bg, #f8f9fa);
+        border: 1px solid var(--hairline-color, #dee2e6);
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .purge-stat-number {
+        font-size: 36px;
+        font-weight: bold;
+        color: var(--body-fg, #333);
+    }
+    .purge-stat-label {
+        color: var(--body-quiet-color, #666);
+    }
+    .purge-warning {
+        background: var(--message-warning-bg, #ffc);
+        border: 1px solid var(--hairline-color, #dca);
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        color: var(--body-fg, #333);
+    }
+    .purge-form {
+        background: var(--darkened-bg, #f9f9f9);
+        border: 1px solid var(--hairline-color, #ddd);
+        padding: 20px;
+        border-radius: 5px;
+    }
+    .purge-form h3 {
+        margin-top: 0;
+        color: var(--body-fg, #333);
+    }
+    .purge-options-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+    }
+    .purge-option-card {
+        background: var(--body-bg, white);
+        border: 1px solid var(--hairline-color, #ddd);
+        padding: 15px;
+        border-radius: 5px;
+    }
+    .purge-option-card h4 {
+        margin-top: 0;
+        color: var(--body-fg, #333);
+    }
+    .purge-option-card p {
+        color: var(--body-quiet-color, #666);
+        font-size: 13px;
+    }
+    .purge-option-danger {
+        border-color: var(--delete-button-bg, #dc3545);
+    }
+    .purge-option-danger h4 {
+        color: var(--delete-button-bg, #dc3545);
+    }
+    @media (max-width: 1200px) {
+        .purge-stats-grid { grid-template-columns: repeat(3, 1fr); }
+        .purge-options-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+        .purge-stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .purge-options-grid { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
 
-<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-bottom: 30px;">
-    <div style="background: #e8f4fd; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #417690;">{{ total_logs }}</div>
-        <div style="color: #666;">Total Logs</div>
+{% block content %}
+<div class="purge-stats-grid">
+    <div class="purge-stat-card">
+        <div class="purge-stat-number">{{ total_logs }}</div>
+        <div class="purge-stat-label">Total Logs</div>
     </div>
-    <div style="background: #fff3e0; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #ef6c00;">{{ older_than_7 }}</div>
-        <div style="color: #666;">Older than 7 days</div>
+    <div class="purge-stat-card">
+        <div class="purge-stat-number">{{ older_than_7 }}</div>
+        <div class="purge-stat-label">Older than 7 days</div>
     </div>
-    <div style="background: #fce4ec; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #c2185b;">{{ older_than_30 }}</div>
-        <div style="color: #666;">Older than 30 days</div>
+    <div class="purge-stat-card">
+        <div class="purge-stat-number">{{ older_than_30 }}</div>
+        <div class="purge-stat-label">Older than 30 days</div>
     </div>
-    <div style="background: #f3e5f5; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #7b1fa2;">{{ older_than_90 }}</div>
-        <div style="color: #666;">Older than 90 days</div>
+    <div class="purge-stat-card">
+        <div class="purge-stat-number">{{ older_than_90 }}</div>
+        <div class="purge-stat-label">Older than 90 days</div>
     </div>
-    <div style="background: #ffebee; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #dc3545;">{{ older_than_365 }}</div>
-        <div style="color: #666;">Older than 1 year</div>
+    <div class="purge-stat-card">
+        <div class="purge-stat-number">{{ older_than_365 }}</div>
+        <div class="purge-stat-label">Older than 1 year</div>
     </div>
 </div>
 
-<div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+<div class="purge-warning">
     <strong>Warning:</strong> Purging logs is irreversible. Make sure you have exported any logs you need before purging.
 </div>
 
-<form method="post" style="background: #f9f9f9; padding: 20px; border-radius: 5px;">
+<form method="post" class="purge-form">
     {% csrf_token %}
 
-    <h3 style="margin-top: 0;">Purge Options</h3>
+    <h3>Purge Options</h3>
 
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-        <div style="background: white; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
-            <h4 style="margin-top: 0;">Purge logs older than 7 days</h4>
-            <p style="color: #666; font-size: 13px;">This will delete {{ older_than_7 }} log entries.</p>
+    <div class="purge-options-grid">
+        <div class="purge-option-card">
+            <h4>Purge logs older than 7 days</h4>
+            <p>This will delete {{ older_than_7 }} log entries.</p>
             <button type="submit" name="action" value="purge_7" class="button" style="background: #ffc107; color: #333;">
                 Purge {{ older_than_7 }} logs
             </button>
         </div>
 
-        <div style="background: white; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
-            <h4 style="margin-top: 0;">Purge logs older than 30 days</h4>
-            <p style="color: #666; font-size: 13px;">This will delete {{ older_than_30 }} log entries.</p>
+        <div class="purge-option-card">
+            <h4>Purge logs older than 30 days</h4>
+            <p>This will delete {{ older_than_30 }} log entries.</p>
             <button type="submit" name="action" value="purge_30" class="button" style="background: #fd7e14; color: white;">
                 Purge {{ older_than_30 }} logs
             </button>
         </div>
 
-        <div style="background: white; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
-            <h4 style="margin-top: 0;">Purge logs older than 90 days</h4>
-            <p style="color: #666; font-size: 13px;">This will delete {{ older_than_90 }} log entries.</p>
+        <div class="purge-option-card">
+            <h4>Purge logs older than 90 days</h4>
+            <p>This will delete {{ older_than_90 }} log entries.</p>
             <button type="submit" name="action" value="purge_90" class="button" style="background: #e91e63; color: white;">
                 Purge {{ older_than_90 }} logs
             </button>
         </div>
 
-        <div style="background: white; border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
-            <h4 style="margin-top: 0;">Purge logs older than 1 year</h4>
-            <p style="color: #666; font-size: 13px;">This will delete {{ older_than_365 }} log entries.</p>
+        <div class="purge-option-card">
+            <h4>Purge logs older than 1 year</h4>
+            <p>This will delete {{ older_than_365 }} log entries.</p>
             <button type="submit" name="action" value="purge_365" class="button" style="background: #9c27b0; color: white;">
                 Purge {{ older_than_365 }} logs
             </button>
         </div>
 
-        <div style="background: #fff5f5; border: 1px solid #dc3545; padding: 15px; border-radius: 5px;">
-            <h4 style="margin-top: 0; color: #dc3545;">Purge ALL logs</h4>
-            <p style="color: #666; font-size: 13px;">This will delete ALL {{ total_logs }} log entries.</p>
-            <button type="submit" name="action" value="purge_all" class="button" style="background: #dc3545; color: white;" onclick="return confirm('Are you sure you want to delete ALL request logs? This cannot be undone.');">
+        <div class="purge-option-card purge-option-danger">
+            <h4>Purge ALL logs</h4>
+            <p>This will delete ALL {{ total_logs }} log entries.</p>
+            <button type="submit" name="action" value="purge_all" class="button" style="background: var(--delete-button-bg, #dc3545); color: white;" onclick="return confirm('Are you sure you want to delete ALL request logs? This cannot be undone.');">
                 Purge ALL {{ total_logs }} logs
             </button>
         </div>
