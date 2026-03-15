@@ -25,6 +25,7 @@ from rest_flex_fields import is_expanded
 from rest_flex_fields.views import FlexFieldsMixin
 from rest_framework import viewsets, filters, permissions
 from rest_framework.decorators import action
+from curtain.throttling import BurstRateThrottle, SustainedRateThrottle, UploadThrottle, CreateThrottle, AuthThrottle
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.response import Response
@@ -158,6 +159,13 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         "curtain_type": "curtain_type__in"
     }
     filter_validation_schema = curtain_query_schema
+
+    def get_throttles(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return [CreateThrottle(), SustainedRateThrottle()]
+        if self.action == 'upload':
+            return [UploadThrottle(), SustainedRateThrottle()]
+        return [BurstRateThrottle(), SustainedRateThrottle()]
 
     def get_queryset(self):
         # Define a subquery to get the latest LastAccess for each Curtain
@@ -705,6 +713,7 @@ class DataCiteViewSets(viewsets.ModelViewSet):
     ordering_fields = ("id", "created")
     ordering = ("-updated", "id")
     pagination_class = LimitOffsetPagination
+    throttle_classes = [CreateThrottle, SustainedRateThrottle]
 
     def get_queryset(self):
         status = self.request.query_params.get("status", None)
@@ -1048,6 +1057,7 @@ class PermanentLinkRequestViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ("id", "requested_at", "status")
     ordering = ("-requested_at",)
+    throttle_classes = [CreateThrottle, SustainedRateThrottle]
 
     def get_queryset(self):
         queryset = self.queryset
@@ -1168,6 +1178,7 @@ class CurtainCollectionViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "description"]
     ordering_fields = ("id", "created", "updated", "name")
     ordering = ("-updated",)
+    throttle_classes = [BurstRateThrottle, SustainedRateThrottle]
 
     def get_permissions(self):
         """

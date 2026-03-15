@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from curtain.models import Curtain
 from curtain.serializers import CurtainSerializer
 from curtain.permissions import IsNonUserPostAllow
+from curtain.throttling import ChunkedUploadThrottle
 from rest_framework import permissions
 
 
@@ -322,6 +323,7 @@ class CurtainChunkedUploadView(ChunkedUploadView):
     serializer_class = CurtainChunkedUploadSerializer
     permission_classes = [permissions.IsAdminUser | IsNonUserPostAllow]
     parser_classes = [MultiPartParser]
+    throttle_classes = [ChunkedUploadThrottle]
 
     def on_completion(self, uploaded_file, request):
         try:

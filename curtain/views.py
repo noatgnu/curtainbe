@@ -337,10 +337,40 @@ class InteractomeAtlasProxyView(APIView):
     permission_classes = (AllowAny,)
 
     def post(self, request, format=None):
-        if request.data["link"]:
-            res = requests.get(request.data["link"].replace("https", "http"))
-            return Response(data=res.json())
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        link = request.data.get("link")
+        if not link:
+            return Response(
+                data={"error": "Missing 'link' parameter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            url = link.replace("http://", "https://").replace("www.interactome-atlas.org", "interactome-atlas.org")
+            res = requests.get(url, timeout=30)
+            res.raise_for_status()
+
+            content_type = res.headers.get('Content-Type', '')
+            if 'application/json' in content_type:
+                return Response(data=res.json())
+            else:
+                try:
+                    return Response(data=res.json())
+                except requests.exceptions.JSONDecodeError:
+                    return Response(
+                        data={"error": "External API returned non-JSON response", "content_type": content_type},
+                        status=status.HTTP_502_BAD_GATEWAY
+                    )
+
+        except requests.exceptions.Timeout:
+            return Response(
+                data={"error": "Request to external API timed out"},
+                status=status.HTTP_504_GATEWAY_TIMEOUT
+            )
+        except requests.exceptions.RequestException as e:
+            return Response(
+                data={"error": f"Failed to reach external API: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
 
 class PrimitiveStatsTestView(APIView):
     """
