@@ -171,14 +171,14 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour',
-        'burst': '60/minute',
-        'sustained': '5000/day',
-        'upload': '50/hour',
-        'chunked_upload': '500/hour',
-        'create': '100/hour',
-        'auth': '10/minute',
+        'anon': '5000/hour',
+        'user': '10000/hour',
+        'burst': '1000/minute',
+        'sustained': '100000/day',
+        'upload': '500/hour',
+        'chunked_upload': '5000/hour',
+        'create': '1000/hour',
+        'auth': '100/minute',
     }
 }
 
@@ -212,6 +212,7 @@ REQUEST_IGNORE_PATHS = [
     "/admin",
     "/static",
     "/logout",
+    "/health/",
     r'^stats/download/',
 ]
 

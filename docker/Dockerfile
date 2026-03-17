@@ -21,7 +21,7 @@ RUN chmod +x /wait-for-services.sh
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-  CMD curl -f http://localhost:8000/ || exit 1
+  CMD curl -f http://localhost:8000/health/ || exit 1
 
 ENTRYPOINT ["/wait-for-services.sh"]
 CMD ["gunicorn", "curtainbe.asgi:application", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "1", "--timeout", "300", "--graceful-timeout", "30", "--max-requests", "1000", "--max-requests-jitter", "100"]

@@ -29,6 +29,10 @@ from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHVi
 from curtain.chunked_upload import CurtainChunkedUploadView
 from curtain.admin import admin_dashboard
 from django.contrib import admin
+from django.http import HttpResponse
+
+def health_check(request):
+    return HttpResponse("OK")
 
 router = routers.DefaultRouter()
 router.register(r'users', UserViewSet)
@@ -42,6 +46,7 @@ router.register(r'permanent-link-requests', PermanentLinkRequestViewSet)
 router.register(r'curtain-collections', CurtainCollectionViewSet)
 
 urlpatterns = [
+    path('health/', health_check, name='health_check'),
     path('', include(router.urls)),
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
