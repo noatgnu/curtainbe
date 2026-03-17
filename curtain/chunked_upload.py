@@ -325,6 +325,18 @@ class CurtainChunkedUploadView(ChunkedUploadView):
     parser_classes = [MultiPartParser]
     throttle_classes = [ChunkedUploadThrottle]
 
+    def get_queryset(self):
+        """
+        Override to handle anonymous users.
+
+        For authenticated users, filter by user as normal.
+        For anonymous users, filter by user__isnull=True to find
+        uploads created without a user.
+        """
+        if isinstance(self.request.user, AnonymousUser):
+            return self.model.objects.filter(user__isnull=True)
+        return self.model.objects.filter(user=self.request.user)
+
     def on_completion(self, uploaded_file, request):
         try:
             curtain_id = request.data.get("curtain_id")
