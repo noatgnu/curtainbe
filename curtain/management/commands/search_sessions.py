@@ -231,7 +231,7 @@ class Command(BaseCommand):
         scanned = 0
         errors = 0
 
-        for curtain in qs.iterator():
+        for curtain in qs.iterator(chunk_size=100):
             if options["limit"] and len(rows) >= options["limit"]:
                 break
             scanned += 1
