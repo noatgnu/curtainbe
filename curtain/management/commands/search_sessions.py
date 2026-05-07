@@ -159,11 +159,13 @@ class Command(BaseCommand):
 
     def _load_file(self, curtain):
         """Return the decoded JSON dict from the session file, or raise ValueError."""
-        if not curtain.file:
+        if not curtain.file or not curtain.file.name:
             raise ValueError("no file attached to this session")
         try:
             with curtain.file.open("rb") as fh:
                 return json.load(fh)
+        except FileNotFoundError:
+            raise ValueError(f"file not found on storage: {curtain.file.name}")
         except json.JSONDecodeError as exc:
             raise ValueError(f"file is not valid JSON (possibly encrypted): {exc}") from exc
         except Exception as exc:
@@ -311,14 +313,27 @@ class Command(BaseCommand):
         if not options["include_encrypted"]:
             qs = qs.filter(encrypted=False)
 
+        total = qs.count()
+        self.stderr.write(f"Found {total} session(s) to scan.\n")
+
         rows = []
         scanned = skipped_encrypted = errors = 0
+        progress_interval = max(1, total // 20)  # update every ~5%
 
         for curtain in qs.iterator(chunk_size=100):
             if options["limit"] and len(rows) >= options["limit"]:
                 break
 
             scanned += 1
+
+            if scanned == 1 or scanned % progress_interval == 0 or scanned == total:
+                pct = scanned * 100 // total if total else 100
+                self.stderr.write(
+                    f"\rProgress: {scanned}/{total} ({pct}%)  "
+                    f"matched={len(rows)}  errors={errors}",
+                    ending="",
+                )
+                self.stderr.flush()
 
             if curtain.encrypted and not options["include_encrypted"]:
                 skipped_encrypted += 1
@@ -327,18 +342,18 @@ class Command(BaseCommand):
             try:
                 data = self._load_file(curtain)
             except ValueError as exc:
-                msg = f"[skip] {curtain.link_id}: {exc}"
                 if options["skip_errors"]:
-                    self.stderr.write(msg)
+                    self.stderr.write(f"\n[skip] {curtain.link_id}: {exc}")
                     errors += 1
                     continue
+                self.stderr.write("")  # newline after progress line
                 raise CommandError(str(exc)) from exc
 
             if self._matches(data, options):
                 rows.append(self._build_row(curtain, data))
 
         self.stderr.write(
-            f"Scanned {scanned} | matched {len(rows)} | "
+            f"\nDone. Scanned {scanned} | matched {len(rows)} | "
             f"errors {errors} | encrypted skipped {skipped_encrypted}"
         )
 
