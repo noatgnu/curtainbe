@@ -150,9 +150,11 @@ class Command(BaseCommand):
     # helpers
     # ------------------------------------------------------------------
 
-    def _parse_date(self, value, field_name):
+    def _parse_date(self, value, field_name, end_of_day=False):
         try:
             dt = datetime.strptime(value, "%Y-%m-%d")
+            if end_of_day:
+                dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             return timezone.make_aware(dt)
         except ValueError:
             raise CommandError(f"--{field_name}: expected YYYY-MM-DD, got '{value}'")
@@ -302,16 +304,23 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         qs = Curtain.objects.prefetch_related("owners").order_by("created")
 
+        self.stderr.write(f"Total sessions in DB: {Curtain.objects.count()}")
+
         if options["from_date"]:
             qs = qs.filter(created__gte=self._parse_date(options["from_date"], "from-date"))
+            self.stderr.write(f"  after --from-date {options['from_date']}:     {qs.count()}")
         if options["to_date"]:
-            qs = qs.filter(created__lte=self._parse_date(options["to_date"], "to-date"))
+            qs = qs.filter(created__lte=self._parse_date(options["to_date"], "to-date", end_of_day=True))
+            self.stderr.write(f"  after --to-date {options['to_date']}:       {qs.count()}")
         if options["curtain_type"]:
             qs = qs.filter(curtain_type=options["curtain_type"])
+            self.stderr.write(f"  after --curtain-type {options['curtain_type']}:          {qs.count()}")
         if options["owner"]:
             qs = qs.filter(owners__username=options["owner"])
+            self.stderr.write(f"  after --owner {options['owner']}:             {qs.count()}")
         if not options["include_encrypted"]:
             qs = qs.filter(encrypted=False)
+            self.stderr.write(f"  after encrypted=False:           {qs.count()}")
 
         total = qs.count()
         self.stderr.write(f"Found {total} session(s) to scan.\n")

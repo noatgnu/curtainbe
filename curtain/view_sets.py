@@ -46,6 +46,7 @@ from curtain.pydantic_models import DataCiteForm
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
     UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer, AnnouncementSerializer, PermanentLinkRequestSerializer, \
     CurtainCollectionSerializer
+from curtain.storage import DataCiteLocalStorage
 from curtain.utils import is_user_staff, delete_file_related_objects, calculate_boxplot_parameters, \
     check_nan_return_none, get_uniprot_data, encrypt_data
 from curtain.validations import curtain_query_schema, kinase_library_query_schema, data_filter_list_query_schema
@@ -817,29 +818,14 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                             if data_cite.curtain:
                                 collection_sessions = collection_sessions.exclude(id=data_cite.curtain.id)
 
+                            local_storage = DataCiteLocalStorage()
                             for curtain_session in collection_sessions:
-                                with transaction.atomic():
-                                    session_datacite = DataCite.objects.create(
-                                        user=data_cite.user,
-                                        contact_email=data_cite.contact_email,
-                                        curtain=curtain_session,
-                                        status="published",
-                                        lock=True,
-                                        title=f"{data_cite.title} - Session {curtain_session.link_id[:8]}"
-                                    )
-
-                                    session_datacite.local_file.save(
-                                        f"collection_{data_cite.collection.id}_{curtain_session.id}_{curtain_session.file.name.split('/')[-1]}",
-                                        curtain_session.file,
-                                        save=False
-                                    )
-                                    session_datacite.save()
-
-                                session_file_path = reverse('datacite_file', kwargs={'datacite_id': session_datacite.id})
+                                filename = f"collection_{data_cite.collection.id}_{curtain_session.id}_{curtain_session.file.name.split('/')[-1]}"
+                                saved_name = local_storage.save(filename, curtain_session.file)
                                 if settings.SITE_DOMAIN:
-                                    session_file_url = f"{settings.SITE_DOMAIN.rstrip('/')}{session_file_path}"
+                                    session_file_url = f"{settings.SITE_DOMAIN.rstrip('/')}{local_storage.url(saved_name)}"
                                 else:
-                                    session_file_url = request.build_absolute_uri(session_file_path)
+                                    session_file_url = request.build_absolute_uri(local_storage.url(saved_name))
 
                                 form_data["alternateIdentifiers"].append({
                                     "alternateIdentifier": session_file_url,
@@ -849,7 +835,9 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                                 collection_metadata["sessions"].append({
                                     "curtain_id": curtain_session.id,
                                     "link_id": curtain_session.link_id,
-                                    "data_url": session_file_url
+                                    "data_url": session_file_url,
+                                    "name": curtain_session.name,
+                                    "description": curtain_session.description
                                 })
 
                             collection_json = json.dumps(collection_metadata, indent=2)
