@@ -180,7 +180,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         ninety_days_ago = timezone.now() - timedelta(days=90)
         query = Q(permanent=True) | Q(latest_last_access__isnull=True) | Q(latest_last_access__gte=ninety_days_ago)
         self.queryset = self.queryset.filter(query).prefetch_related(
-            Prefetch('data_cite', queryset=DataCite.objects.order_by('-updated'), to_attr='prefetched_data_cite')
+            Prefetch('data_cite', queryset=DataCite.objects.select_related('curtain').order_by('-updated'), to_attr='prefetched_data_cite')
         )
 
         return self.queryset
