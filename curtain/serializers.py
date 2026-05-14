@@ -4,6 +4,7 @@ import os
 from rest_flex_fields import FlexFieldsModelSerializer
 from rest_framework import serializers
 from django.urls import reverse
+from django.utils import timezone
 
 from curtain.models import Curtain, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
     DataAESEncryptionFactors, DataHash, LastAccess, DataCite, Announcement, PermanentLinkRequest, CurtainCollection
@@ -46,20 +47,22 @@ class CurtainSerializer(serializers.ModelSerializer):
         return filename
 
     def get_data_cite(self, record):
-        data_cite = DataCite.objects.filter(curtain=record)
-        if data_cite.exists():
-            return DataCiteSerializer(data_cite.first()).data
-        else:
-            return None
+        prefetched = getattr(record, 'prefetched_data_cite', None)
+        if prefetched is not None:
+            return DataCiteSerializer(prefetched[0]).data if prefetched else None
+        data_cite = DataCite.objects.filter(curtain=record).order_by('-updated').first()
+        return DataCiteSerializer(data_cite).data if data_cite else None
 
     def get_is_expired(self, record):
-        return record.is_expired
+        if record.permanent:
+            return False
+        latest_access = getattr(record, 'latest_last_access', None)
+        if latest_access:
+            return timezone.now() > latest_access + record.expiry_duration
+        return timezone.now() > record.created + record.expiry_duration
 
     def get_last_access_date(self, record):
-        last_access_record = record.last_access.order_by('-last_access').first()
-        if last_access_record:
-            return last_access_record.last_access
-        return None
+        return getattr(record, 'latest_last_access', None)
 
     def get_expiry_duration_months(self, record):
         return int(record.expiry_duration.days / 30)

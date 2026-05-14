@@ -14,7 +14,7 @@ from django.contrib.admin.templatetags.admin_list import pagination
 from django.core.files.base import File as djangoFile
 from django.contrib.auth.models import User, AnonymousUser
 from django.core.signing import TimestampSigner
-from django.db.models import Q, Count, OuterRef, Subquery
+from django.db.models import Q, Count, OuterRef, Subquery, Prefetch
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -169,22 +169,19 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         return [BurstRateThrottle(), SustainedRateThrottle()]
 
     def get_queryset(self):
-        # Define a subquery to get the latest LastAccess for each Curtain
         latest_last_access_subquery = LastAccess.objects.filter(
             curtain=OuterRef('pk')
         ).order_by('-last_access').values('last_access')[:1]
 
-        # Annotate the Curtain queryset with the latest last_access date
         self.queryset = self.queryset.annotate(
             latest_last_access=Subquery(latest_last_access_subquery)
         )
 
-        # Get the date 90 days ago
         ninety_days_ago = timezone.now() - timedelta(days=90)
-
-        # Filter the Curtain queryset based on the conditions
         query = Q(permanent=True) | Q(latest_last_access__isnull=True) | Q(latest_last_access__gte=ninety_days_ago)
-        self.queryset = self.queryset.filter(query)
+        self.queryset = self.queryset.filter(query).prefetch_related(
+            Prefetch('data_cite', queryset=DataCite.objects.order_by('-updated'), to_attr='prefetched_data_cite')
+        )
 
         return self.queryset
 
