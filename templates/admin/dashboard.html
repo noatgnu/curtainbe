@@ -1,147 +1,239 @@
 {% extends "admin/base_site.html" %}
 {% load i18n admin_urls %}
 
-{% block content %}
-<h1>Dashboard</h1>
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .dash-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .dash-stat-card {
+        background: var(--darkened-bg, #f8f9fa);
+        border: 1px solid var(--hairline-color, #dee2e6);
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .dash-stat-number {
+        font-size: 36px;
+        font-weight: bold;
+        color: var(--body-fg, #333);
+    }
+    .dash-stat-label {
+        color: var(--body-quiet-color, #666);
+        margin-bottom: 10px;
+    }
+    .dash-two-col {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .dash-panel {
+        background: var(--body-bg, #fff);
+        border: 1px solid var(--hairline-color, #ddd);
+        border-radius: 8px;
+        padding: 20px;
+    }
+    .dash-panel h2 {
+        margin-top: 0;
+        border-bottom: 1px solid var(--hairline-color, #eee);
+        padding-bottom: 10px;
+        color: var(--body-fg, #333);
+    }
+    .dash-table {
+        width: 100%;
+    }
+    .dash-table td {
+        padding: 8px 0;
+        color: var(--body-fg, #333);
+    }
+    .dash-table .stat-value {
+        text-align: right;
+        font-weight: bold;
+    }
+    .dash-table .stat-value-danger {
+        text-align: right;
+        font-weight: bold;
+        color: var(--delete-button-bg, #dc3545);
+    }
+    .dash-table .stat-value-success {
+        text-align: right;
+        font-weight: bold;
+        color: #28a745;
+    }
+    .dash-inner-table {
+        width: 100%;
+        font-size: 13px;
+    }
+    .dash-inner-table thead tr {
+        background: var(--darkened-bg, #f5f5f5);
+    }
+    .dash-inner-table th {
+        padding: 8px;
+        text-align: left;
+        color: var(--body-fg, #333);
+    }
+    .dash-inner-table td {
+        padding: 8px;
+        color: var(--body-fg, #333);
+    }
+    .dash-empty {
+        color: var(--body-quiet-color, #666);
+    }
+    .dash-quick-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .dash-back {
+        margin-top: 20px;
+    }
+    @media (max-width: 900px) {
+        .dash-stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .dash-two-col { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
 
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px;">
-    <div style="background: #e8f4fd; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #417690;">{{ total_curtains }}</div>
-        <div style="color: #666; margin-bottom: 10px;">Total Curtains</div>
+{% block content %}
+<div class="dash-stats-grid">
+    <div class="dash-stat-card">
+        <div class="dash-stat-number">{{ total_curtains }}</div>
+        <div class="dash-stat-label">Total Curtains</div>
         <a href="{% url 'admin:curtain_curtain_changelist' %}" class="button" style="font-size: 12px;">View All</a>
     </div>
-    <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #2e7d32;">{{ total_users }}</div>
-        <div style="color: #666; margin-bottom: 10px;">Total Users</div>
+    <div class="dash-stat-card">
+        <div class="dash-stat-number">{{ total_users }}</div>
+        <div class="dash-stat-label">Total Users</div>
         <a href="{% url 'admin:auth_user_changelist' %}" class="button" style="font-size: 12px;">View All</a>
     </div>
-    <div style="background: #fff3e0; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #ef6c00;">{{ total_collections }}</div>
-        <div style="color: #666; margin-bottom: 10px;">Collections</div>
+    <div class="dash-stat-card">
+        <div class="dash-stat-number">{{ total_collections }}</div>
+        <div class="dash-stat-label">Collections</div>
         <a href="{% url 'admin:curtain_curtaincollection_changelist' %}" class="button" style="font-size: 12px;">View All</a>
     </div>
-    <div style="background: #fce4ec; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 36px; font-weight: bold; color: #c2185b;">{{ pending_requests }}</div>
-        <div style="color: #666; margin-bottom: 10px;">Pending Requests</div>
+    <div class="dash-stat-card">
+        <div class="dash-stat-number">{{ pending_requests }}</div>
+        <div class="dash-stat-label">Pending Requests</div>
         <a href="{% url 'admin:curtain_permanentlinkrequest_changelist' %}?status=pending" class="button" style="font-size: 12px;">Review</a>
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px;">
-    <div style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-        <h2 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">Curtain Statistics</h2>
-        <table style="width: 100%;">
+<div class="dash-two-col">
+    <div class="dash-panel">
+        <h2>Curtain Statistics</h2>
+        <table class="dash-table">
             <tr>
-                <td style="padding: 8px 0;">Permanent</td>
-                <td style="text-align: right; font-weight: bold;">{{ permanent_count }}</td>
+                <td>Permanent</td>
+                <td class="stat-value">{{ permanent_count }}</td>
             </tr>
             <tr>
-                <td style="padding: 8px 0;">Enabled</td>
-                <td style="text-align: right; font-weight: bold;">{{ enabled_count }}</td>
+                <td>Enabled</td>
+                <td class="stat-value">{{ enabled_count }}</td>
             </tr>
             <tr>
-                <td style="padding: 8px 0;">Expired</td>
-                <td style="text-align: right; font-weight: bold; color: #dc3545;">{{ expired_count }}</td>
+                <td>Expired</td>
+                <td class="stat-value-danger">{{ expired_count }}</td>
             </tr>
             <tr>
-                <td style="padding: 8px 0;">Pending DataCite</td>
-                <td style="text-align: right; font-weight: bold;">{{ pending_datacite }}</td>
+                <td>Pending DataCite</td>
+                <td class="stat-value">{{ pending_datacite }}</td>
             </tr>
         </table>
     </div>
 
-    <div style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-        <h2 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">Recent Activity</h2>
-        <table style="width: 100%;">
+    <div class="dash-panel">
+        <h2>Recent Activity</h2>
+        <table class="dash-table">
             <tr>
-                <td style="padding: 8px 0;">New Curtains (7 days)</td>
-                <td style="text-align: right; font-weight: bold; color: #28a745;">+{{ new_curtains_week }}</td>
+                <td>New Curtains (7 days)</td>
+                <td class="stat-value-success">+{{ new_curtains_week }}</td>
             </tr>
             <tr>
-                <td style="padding: 8px 0;">New Curtains (30 days)</td>
-                <td style="text-align: right; font-weight: bold; color: #28a745;">+{{ new_curtains_month }}</td>
+                <td>New Curtains (30 days)</td>
+                <td class="stat-value-success">+{{ new_curtains_month }}</td>
             </tr>
             <tr>
-                <td style="padding: 8px 0;">New Users (7 days)</td>
-                <td style="text-align: right; font-weight: bold; color: #28a745;">+{{ new_users_week }}</td>
+                <td>New Users (7 days)</td>
+                <td class="stat-value-success">+{{ new_users_week }}</td>
             </tr>
             <tr>
-                <td style="padding: 8px 0;">New Users (30 days)</td>
-                <td style="text-align: right; font-weight: bold; color: #28a745;">+{{ new_users_month }}</td>
+                <td>New Users (30 days)</td>
+                <td class="stat-value-success">+{{ new_users_month }}</td>
             </tr>
         </table>
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px;">
-    <div style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-        <h2 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">Recent Curtains</h2>
+<div class="dash-two-col">
+    <div class="dash-panel">
+        <h2>Recent Curtains</h2>
         {% if recent_curtains %}
-        <table style="width: 100%; font-size: 13px;">
+        <table class="dash-inner-table">
             <thead>
-                <tr style="background: #f5f5f5;">
-                    <th style="padding: 8px; text-align: left;">Link ID</th>
-                    <th style="padding: 8px; text-align: left;">Type</th>
-                    <th style="padding: 8px; text-align: left;">Created</th>
+                <tr>
+                    <th>Link ID</th>
+                    <th>Type</th>
+                    <th>Created</th>
                 </tr>
             </thead>
             <tbody>
                 {% for curtain in recent_curtains %}
                 <tr>
-                    <td style="padding: 8px;">
-                        <a href="{% url 'admin:curtain_curtain_change' curtain.id %}">{{ curtain.link_id|truncatechars:12 }}</a>
-                    </td>
-                    <td style="padding: 8px;">{{ curtain.curtain_type }}</td>
-                    <td style="padding: 8px;">{{ curtain.created|date:"M d, H:i" }}</td>
+                    <td><a href="{% url 'admin:curtain_curtain_change' curtain.id %}">{{ curtain.link_id|truncatechars:12 }}</a></td>
+                    <td>{{ curtain.curtain_type }}</td>
+                    <td>{{ curtain.created|date:"M d, H:i" }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <p style="color: #666;">No recent curtains.</p>
+        <p class="dash-empty">No recent curtains.</p>
         {% endif %}
     </div>
 
-    <div style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-        <h2 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">Pending Requests</h2>
+    <div class="dash-panel">
+        <h2>Pending Requests</h2>
         {% if recent_requests %}
-        <table style="width: 100%; font-size: 13px;">
+        <table class="dash-inner-table">
             <thead>
-                <tr style="background: #f5f5f5;">
-                    <th style="padding: 8px; text-align: left;">Curtain</th>
-                    <th style="padding: 8px; text-align: left;">User</th>
-                    <th style="padding: 8px; text-align: left;">Type</th>
+                <tr>
+                    <th>Curtain</th>
+                    <th>User</th>
+                    <th>Type</th>
                 </tr>
             </thead>
             <tbody>
                 {% for req in recent_requests %}
                 <tr>
-                    <td style="padding: 8px;">
-                        <a href="{% url 'admin:curtain_permanentlinkrequest_change' req.id %}">{{ req.curtain.link_id|truncatechars:12 }}</a>
-                    </td>
-                    <td style="padding: 8px;">{{ req.requested_by.username }}</td>
-                    <td style="padding: 8px;">{{ req.get_request_type_display }}</td>
+                    <td><a href="{% url 'admin:curtain_permanentlinkrequest_change' req.id %}">{{ req.curtain.link_id|truncatechars:12 }}</a></td>
+                    <td>{{ req.requested_by.username }}</td>
+                    <td>{{ req.get_request_type_display }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <p style="color: #666;">No pending requests.</p>
+        <p class="dash-empty">No pending requests.</p>
         {% endif %}
     </div>
 </div>
 
-<div style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-    <h2 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">Quick Actions</h2>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+<div class="dash-panel" style="margin-bottom: 20px;">
+    <h2>Quick Actions</h2>
+    <div class="dash-quick-actions">
         <a href="{% url 'admin:curtain_curtain_changelist' %}?expiry_status=expired" class="button">View Expired</a>
-        <a href="{% url 'admin:curtain_curtain_maintenance' %}" class="button" style="background: #417690;">Maintenance Tools</a>
-        <a href="{% url 'admin:curtain_curtain_export_csv' %}" class="button" style="background: #28a745;">Export All CSV</a>
-        <a href="{% url 'admin:curtain_datacite_changelist' %}?status=pending" class="button" style="background: #ffc107; color: #333;">Review DataCite</a>
+        <a href="{% url 'admin:curtain_curtain_maintenance' %}" class="button" style="background: var(--primary, #417690); color: white;">Maintenance Tools</a>
+        <a href="{% url 'admin:curtain_curtain_export_csv' %}" class="button" style="background: var(--primary, #417690); color: white;">Export All CSV</a>
+        <a href="{% url 'admin:curtain_datacite_changelist' %}?status=pending" class="button" style="background: #ffc107; color: var(--body-fg, #333);">Review DataCite</a>
     </div>
 </div>
 
-<div style="margin-top: 20px;">
+<div class="dash-back">
     <a href="{% url 'admin:index' %}" class="button">&larr; Back to Admin Index</a>
 </div>
 {% endblock %}

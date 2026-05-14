@@ -1,11 +1,37 @@
 {% extends "admin/index.html" %}
 {% load i18n %}
 
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .index-dashboard-banner {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: var(--primary, #417690);
+        border-radius: 8px;
+        color: var(--primary-fg, white);
+    }
+    .index-dashboard-banner h2 {
+        margin: 0 0 10px 0;
+        color: var(--primary-fg, white);
+    }
+    .index-dashboard-banner p {
+        margin: 0 0 15px 0;
+        opacity: 0.9;
+    }
+    .index-dashboard-banner .button {
+        background: var(--body-bg, white);
+        color: var(--primary, #417690);
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #417690 0%, #2a5065 100%); border-radius: 8px; color: white;">
-    <h2 style="margin: 0 0 10px 0;">&#128202; Dashboard</h2>
-    <p style="margin: 0 0 15px 0; opacity: 0.9;">Quick overview of your Curtain platform statistics and pending tasks.</p>
-    <a href="{% url 'admin_dashboard' %}" class="button" style="background: white; color: #417690; font-weight: bold;">
+<div class="index-dashboard-banner">
+    <h2>&#128202; Dashboard</h2>
+    <p>Quick overview of your Curtain platform statistics and pending tasks.</p>
+    <a href="{% url 'admin_dashboard' %}" class="button">
         Open Dashboard
     </a>
 </div>

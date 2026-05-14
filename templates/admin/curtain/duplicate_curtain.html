@@ -1,31 +1,113 @@
 {% extends "admin/base_site.html" %}
 {% load i18n admin_urls %}
 
-{% block content %}
-<h1>Duplicate Curtains</h1>
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .dup-warning {
+        background: var(--message-warning-bg, #ffc);
+        border: 1px solid var(--hairline-color, #dca);
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        color: var(--body-fg, #333);
+    }
+    .dup-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    .dup-table thead tr {
+        background: var(--darkened-bg, #f5f5f5);
+    }
+    .dup-table th {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 2px solid var(--hairline-color, #ddd);
+        color: var(--body-fg, #333);
+    }
+    .dup-table td {
+        padding: 10px;
+        border-bottom: 1px solid var(--hairline-color, #eee);
+        color: var(--body-fg, #333);
+    }
+    .dup-form {
+        background: var(--darkened-bg, #f9f9f9);
+        padding: 20px;
+        border-radius: 5px;
+    }
+    .dup-form h3 {
+        margin-top: 0;
+        color: var(--body-fg, #333);
+    }
+    .dup-field {
+        margin-bottom: 15px;
+    }
+    .dup-field label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: var(--body-fg, #333);
+    }
+    .dup-field select {
+        width: 300px;
+        padding: 8px;
+        background: var(--body-bg, #fff);
+        border: 1px solid var(--hairline-color, #ddd);
+        color: var(--body-fg, #333);
+    }
+    .dup-field-hint {
+        color: var(--body-quiet-color, #666);
+        font-size: 12px;
+        margin: 5px 0 0 0;
+    }
+    .dup-checkbox {
+        margin-bottom: 15px;
+    }
+    .dup-checkbox label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        color: var(--body-fg, #333);
+    }
+    .dup-checkbox input[type="checkbox"] {
+        margin-right: 10px;
+    }
+    .dup-list {
+        color: var(--body-quiet-color, #666);
+    }
+    .dup-list-muted {
+        color: var(--body-quiet-color, #999);
+    }
+    .dup-actions {
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
 
-<div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+{% block content %}
+<div class="dup-warning">
     <strong>Note:</strong> This will create new curtain entries with the same settings but <strong>without</strong> the associated files.
     You will need to upload new data files to the duplicated curtains.
 </div>
 
 <h2>Selected Curtains ({{ curtains.count }})</h2>
-<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+<table class="dup-table">
     <thead>
-        <tr style="background: #f5f5f5;">
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Link ID</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Name</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Type</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Owners</th>
+        <tr>
+            <th>Link ID</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Owners</th>
         </tr>
     </thead>
     <tbody>
         {% for curtain in curtains %}
         <tr>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;"><code>{{ curtain.link_id|truncatechars:12 }}</code></td>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ curtain.name|default:"-" }}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ curtain.curtain_type }}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;">
+            <td><code>{{ curtain.link_id|truncatechars:12 }}</code></td>
+            <td>{{ curtain.name|default:"-" }}</td>
+            <td>{{ curtain.curtain_type }}</td>
+            <td>
                 {% for owner in curtain.owners.all %}
                     {{ owner.username }}{% if not forloop.last %}, {% endif %}
                 {% empty %}
@@ -37,38 +119,38 @@
     </tbody>
 </table>
 
-<form method="post" style="background: #f9f9f9; padding: 20px; border-radius: 5px;">
+<form method="post" class="dup-form">
     {% csrf_token %}
 
-    <h3 style="margin-top: 0;">Duplication Options</h3>
+    <h3>Duplication Options</h3>
 
-    <div style="margin-bottom: 15px;">
-        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Assign to New Owner (optional):</label>
-        <select name="new_owner" style="width: 300px; padding: 8px;">
+    <div class="dup-field">
+        <label>Assign to New Owner (optional):</label>
+        <select name="new_owner">
             <option value="">-- No additional owner --</option>
             {% for user in users %}
             <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
             {% endfor %}
         </select>
-        <p style="color: #666; font-size: 12px; margin: 5px 0 0 0;">This user will be added as an owner to the duplicated curtains.</p>
+        <p class="dup-field-hint">This user will be added as an owner to the duplicated curtains.</p>
     </div>
 
-    <div style="margin-bottom: 15px;">
-        <label style="display: flex; align-items: center; cursor: pointer;">
-            <input type="checkbox" name="copy_owners" checked style="margin-right: 10px;">
+    <div class="dup-checkbox">
+        <label>
+            <input type="checkbox" name="copy_owners" checked>
             <span>Copy existing owners to duplicated curtains</span>
         </label>
     </div>
 
-    <div style="margin-bottom: 15px;">
-        <label style="display: flex; align-items: center; cursor: pointer;">
-            <input type="checkbox" name="copy_description" checked style="margin-right: 10px;">
+    <div class="dup-checkbox">
+        <label>
+            <input type="checkbox" name="copy_description" checked>
             <span>Copy description to duplicated curtains</span>
         </label>
     </div>
 
     <h4>What will be copied:</h4>
-    <ul style="color: #666;">
+    <ul class="dup-list">
         <li>Curtain type</li>
         <li>Name (prefixed with "Copy of")</li>
         <li>Description (if checked above)</li>
@@ -77,7 +159,7 @@
     </ul>
 
     <h4>What will NOT be copied:</h4>
-    <ul style="color: #999;">
+    <ul class="dup-list-muted">
         <li>Data files</li>
         <li>Encryption settings</li>
         <li>Access tokens</li>
@@ -86,8 +168,8 @@
         <li>Enable status (new curtains start as disabled)</li>
     </ul>
 
-    <div style="margin-top: 20px;">
-        <button type="submit" class="button" style="background: #417690; color: white; padding: 10px 20px; font-size: 14px;">
+    <div class="dup-actions">
+        <button type="submit" class="button" style="background: var(--primary, #417690); color: white; padding: 10px 20px; font-size: 14px;">
             Duplicate {{ curtains.count }} Curtain(s)
         </button>
         <a href="{% url 'admin:curtain_curtain_changelist' %}" class="button" style="margin-left: 10px;">Cancel</a>

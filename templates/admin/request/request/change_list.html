@@ -5,7 +5,7 @@
 {{ block.super }}
 {% if show_purge_link %}
 <li>
-    <a href="{% url 'admin:request_request_purge' %}" class="button" style="background: #dc3545;">
+    <a href="{% url 'admin:request_request_purge' %}" class="button" style="background: var(--delete-button-bg, #dc3545);">
         &#128465; Purge Logs
     </a>
 </li>

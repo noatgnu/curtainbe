@@ -1,37 +1,93 @@
 {% extends "admin/base_site.html" %}
 {% load i18n admin_urls %}
 
-{% block content %}
-<h1>{{ title }}</h1>
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .maint-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .maint-stat-card {
+        background: var(--darkened-bg, #f8f9fa);
+        border: 1px solid var(--hairline-color, #dee2e6);
+        padding: 20px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .maint-stat-number {
+        font-size: 32px;
+        font-weight: bold;
+        color: var(--body-fg, #333);
+    }
+    .maint-stat-label {
+        color: var(--body-quiet-color, #666);
+    }
+    .maint-section {
+        background: var(--body-bg, #fff);
+        border: 1px solid var(--hairline-color, #ddd);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .maint-section h2 {
+        margin-top: 0;
+        color: var(--body-fg, #333);
+    }
+    .maint-section p {
+        color: var(--body-quiet-color, #666);
+    }
+    .maint-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+    }
+    .maint-quick-links {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .maint-back {
+        margin-top: 20px;
+    }
+    @media (max-width: 900px) {
+        .maint-stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .maint-actions-grid { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
 
-<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px;">
-    <div style="background: #e8f4fd; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 32px; font-weight: bold; color: #417690;">{{ total_curtains }}</div>
-        <div style="color: #666;">Total Curtains</div>
+{% block content %}
+<div class="maint-stats-grid">
+    <div class="maint-stat-card">
+        <div class="maint-stat-number">{{ total_curtains }}</div>
+        <div class="maint-stat-label">Total Curtains</div>
     </div>
-    <div style="background: #d4edda; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 32px; font-weight: bold; color: #28a745;">{{ permanent_count }}</div>
-        <div style="color: #666;">Permanent</div>
+    <div class="maint-stat-card">
+        <div class="maint-stat-number">{{ permanent_count }}</div>
+        <div class="maint-stat-label">Permanent</div>
     </div>
-    <div style="background: #fff3cd; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 32px; font-weight: bold; color: #856404;">{{ enabled_count }}</div>
-        <div style="color: #666;">Enabled</div>
+    <div class="maint-stat-card">
+        <div class="maint-stat-number">{{ enabled_count }}</div>
+        <div class="maint-stat-label">Enabled</div>
     </div>
-    <div style="background: #f8d7da; padding: 20px; border-radius: 8px; text-align: center;">
-        <div style="font-size: 32px; font-weight: bold; color: #721c24;">{{ expired_count }}</div>
-        <div style="color: #666;">Expired</div>
+    <div class="maint-stat-card">
+        <div class="maint-stat-number">{{ expired_count }}</div>
+        <div class="maint-stat-label">Expired</div>
     </div>
 </div>
 
-<div style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-    <h2 style="margin-top: 0;">Maintenance Actions</h2>
-    <p style="color: #666;">These actions are irreversible. Please make sure you have a backup before proceeding.</p>
+<div class="maint-section">
+    <h2>Maintenance Actions</h2>
+    <p>These actions are irreversible. Please make sure you have a backup before proceeding.</p>
 
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+    <div class="maint-actions-grid">
         <form method="post" onsubmit="return confirm('Are you sure you want to delete all expired curtains? This action cannot be undone.');">
             {% csrf_token %}
             <input type="hidden" name="action" value="delete_expired">
-            <button type="submit" class="button" style="width: 100%; background: #dc3545; padding: 15px;">
+            <button type="submit" class="button" style="width: 100%; background: var(--delete-button-bg, #dc3545); color: white; padding: 15px;">
                 <strong>Delete All Expired</strong><br>
                 <small>({{ expired_count }} curtains)</small>
             </button>
@@ -40,7 +96,7 @@
         <form method="post" onsubmit="return confirm('Are you sure you want to delete curtains with no access in 30 days? This action cannot be undone.');">
             {% csrf_token %}
             <input type="hidden" name="action" value="delete_no_access_30">
-            <button type="submit" class="button" style="width: 100%; background: #fd7e14; padding: 15px;">
+            <button type="submit" class="button" style="width: 100%; background: #fd7e14; color: white; padding: 15px;">
                 <strong>Delete No Access (30 days)</strong><br>
                 <small>Temporary curtains only</small>
             </button>
@@ -49,7 +105,7 @@
         <form method="post" onsubmit="return confirm('Are you sure you want to delete curtains with no access in 90 days? This action cannot be undone.');">
             {% csrf_token %}
             <input type="hidden" name="action" value="delete_no_access_90">
-            <button type="submit" class="button" style="width: 100%; background: #ffc107; color: #333; padding: 15px;">
+            <button type="submit" class="button" style="width: 100%; background: #ffc107; color: var(--body-fg, #333); padding: 15px;">
                 <strong>Delete No Access (90 days)</strong><br>
                 <small>Temporary curtains only</small>
             </button>
@@ -57,17 +113,17 @@
     </div>
 </div>
 
-<div style="background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 20px;">
-    <h2 style="margin-top: 0;">Quick Links</h2>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+<div class="maint-section">
+    <h2>Quick Links</h2>
+    <div class="maint-quick-links">
         <a href="{% url 'admin:curtain_curtain_changelist' %}?expiry_status=expired" class="button">View Expired</a>
         <a href="{% url 'admin:curtain_curtain_changelist' %}?expiry_status=permanent" class="button">View Permanent</a>
         <a href="{% url 'admin:curtain_curtain_changelist' %}?enable__exact=0" class="button">View Disabled</a>
-        <a href="{% url 'admin:curtain_curtain_export_csv' %}" class="button" style="background: #28a745;">Export All to CSV</a>
+        <a href="{% url 'admin:curtain_curtain_export_csv' %}" class="button" style="background: var(--primary, #417690); color: white;">Export All to CSV</a>
     </div>
 </div>
 
-<div style="margin-top: 20px;">
+<div class="maint-back">
     <a href="{% url 'admin:curtain_curtain_changelist' %}" class="button">&larr; Back to Curtain List</a>
 </div>
 {% endblock %}

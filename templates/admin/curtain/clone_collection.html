@@ -1,35 +1,119 @@
 {% extends "admin/base_site.html" %}
 {% load i18n admin_urls %}
 
-{% block content %}
-<h1>Clone Collections</h1>
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .clone-info {
+        background: var(--message-success-bg, #dfd);
+        border: 1px solid var(--hairline-color, #cec);
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        color: var(--body-fg, #333);
+    }
+    .clone-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    .clone-table thead tr {
+        background: var(--darkened-bg, #f5f5f5);
+    }
+    .clone-table th {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 2px solid var(--hairline-color, #ddd);
+        color: var(--body-fg, #333);
+    }
+    .clone-table td {
+        padding: 10px;
+        border-bottom: 1px solid var(--hairline-color, #eee);
+        color: var(--body-fg, #333);
+    }
+    .status-yes { color: #28a745; }
+    .status-no { color: var(--delete-button-bg, #dc3545); }
+    .clone-form {
+        background: var(--darkened-bg, #f9f9f9);
+        padding: 20px;
+        border-radius: 5px;
+    }
+    .clone-form h3 {
+        margin-top: 0;
+        color: var(--body-fg, #333);
+    }
+    .clone-field {
+        margin-bottom: 15px;
+    }
+    .clone-field label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: var(--body-fg, #333);
+    }
+    .clone-field select {
+        width: 300px;
+        padding: 8px;
+        background: var(--body-bg, #fff);
+        border: 1px solid var(--hairline-color, #ddd);
+        color: var(--body-fg, #333);
+    }
+    .clone-field-hint {
+        color: var(--body-quiet-color, #666);
+        font-size: 12px;
+        margin: 5px 0 0 0;
+    }
+    .clone-checkbox {
+        margin-bottom: 15px;
+    }
+    .clone-checkbox label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        color: var(--body-fg, #333);
+    }
+    .clone-checkbox input[type="checkbox"] {
+        margin-right: 10px;
+    }
+    .clone-list {
+        color: var(--body-quiet-color, #666);
+    }
+    .clone-list-muted {
+        color: var(--body-quiet-color, #999);
+    }
+    .clone-actions {
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
 
-<div style="background: #d4edda; border: 1px solid #28a745; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+{% block content %}
+<div class="clone-info">
     <strong>Info:</strong> This will create new collection entries with the same settings.
     You can optionally include all curtains from the original collections.
 </div>
 
 <h2>Selected Collections ({{ collections.count }})</h2>
-<table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+<table class="clone-table">
     <thead>
-        <tr style="background: #f5f5f5;">
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Name</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Owner</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Curtains</th>
-            <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Enabled</th>
+        <tr>
+            <th>Name</th>
+            <th>Owner</th>
+            <th>Curtains</th>
+            <th>Enabled</th>
         </tr>
     </thead>
     <tbody>
         {% for collection in collections %}
         <tr>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ collection.name }}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ collection.owner.username|default:"None" }}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;">{{ collection.curtains.count }}</td>
-            <td style="padding: 10px; border-bottom: 1px solid #eee;">
+            <td>{{ collection.name }}</td>
+            <td>{{ collection.owner.username|default:"None" }}</td>
+            <td>{{ collection.curtains.count }}</td>
+            <td>
                 {% if collection.enable %}
-                    <span style="color: green;">&#10003;</span>
+                    <span class="status-yes">&#10003;</span>
                 {% else %}
-                    <span style="color: red;">&#10007;</span>
+                    <span class="status-no">&#10007;</span>
                 {% endif %}
             </td>
         </tr>
@@ -37,39 +121,39 @@
     </tbody>
 </table>
 
-<form method="post" style="background: #f9f9f9; padding: 20px; border-radius: 5px;">
+<form method="post" class="clone-form">
     {% csrf_token %}
 
-    <h3 style="margin-top: 0;">Clone Options</h3>
+    <h3>Clone Options</h3>
 
-    <div style="margin-bottom: 15px;">
-        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Assign to New Owner (optional):</label>
-        <select name="new_owner" style="width: 300px; padding: 8px;">
+    <div class="clone-field">
+        <label>Assign to New Owner (optional):</label>
+        <select name="new_owner">
             <option value="">-- Keep original owner or none --</option>
             {% for user in users %}
             <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
             {% endfor %}
         </select>
-        <p style="color: #666; font-size: 12px; margin: 5px 0 0 0;">If selected, this user will be the owner of the cloned collections. Otherwise, it will use the original owner (if "Copy original owner" is checked) or no owner.</p>
+        <p class="clone-field-hint">If selected, this user will be the owner of the cloned collections. Otherwise, it will use the original owner (if "Copy original owner" is checked) or no owner.</p>
     </div>
 
-    <div style="margin-bottom: 15px;">
-        <label style="display: flex; align-items: center; cursor: pointer;">
-            <input type="checkbox" name="copy_owner" checked style="margin-right: 10px;">
+    <div class="clone-checkbox">
+        <label>
+            <input type="checkbox" name="copy_owner" checked>
             <span>Copy original owner to cloned collections (if no new owner selected)</span>
         </label>
     </div>
 
-    <div style="margin-bottom: 15px;">
-        <label style="display: flex; align-items: center; cursor: pointer;">
-            <input type="checkbox" name="copy_curtains" checked style="margin-right: 10px;">
+    <div class="clone-checkbox">
+        <label>
+            <input type="checkbox" name="copy_curtains" checked>
             <span>Include all curtains from original collections</span>
         </label>
-        <p style="color: #666; font-size: 12px; margin: 5px 0 0 25px;">The same curtain sessions will be associated with the cloned collections. This does not duplicate the curtains themselves.</p>
+        <p class="clone-field-hint" style="margin-left: 25px;">The same curtain sessions will be associated with the cloned collections. This does not duplicate the curtains themselves.</p>
     </div>
 
     <h4>What will be copied:</h4>
-    <ul style="color: #666;">
+    <ul class="clone-list">
         <li>Collection name (prefixed with "Copy of")</li>
         <li>Description</li>
         <li>Owner (based on options above)</li>
@@ -77,13 +161,13 @@
     </ul>
 
     <h4>What will NOT be copied:</h4>
-    <ul style="color: #999;">
+    <ul class="clone-list-muted">
         <li>Enable status (new collections start as disabled)</li>
         <li>DataCite records</li>
     </ul>
 
-    <div style="margin-top: 20px;">
-        <button type="submit" class="button" style="background: #417690; color: white; padding: 10px 20px; font-size: 14px;">
+    <div class="clone-actions">
+        <button type="submit" class="button" style="background: var(--primary, #417690); color: white; padding: 10px 20px; font-size: 14px;">
             Clone {{ collections.count }} Collection(s)
         </button>
         <a href="{% url 'admin:curtain_curtaincollection_changelist' %}" class="button" style="margin-left: 10px;">Cancel</a>

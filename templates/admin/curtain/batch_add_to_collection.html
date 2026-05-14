@@ -1,12 +1,23 @@
 {% extends "admin/base_site.html" %}
 {% load i18n admin_urls %}
 
-{% block content %}
-<h1>{{ title }}</h1>
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .batch-list {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid var(--hairline-color, #ccc);
+        padding: 10px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
 
+{% block content %}
 <p>You are about to add the following {{ curtains.count }} curtain(s) to a collection:</p>
 
-<ul style="max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 20px;">
+<ul class="batch-list">
 {% for curtain in curtains %}
     <li><strong>{{ curtain.link_id|truncatechars:12 }}</strong> - {{ curtain.description|truncatechars:50 }}</li>
 {% endfor %}
