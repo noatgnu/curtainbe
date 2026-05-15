@@ -223,6 +223,7 @@ class CurtainCollectionSerializer(serializers.ModelSerializer):
                 accessible.append({
                     "id": curtain.id,
                     "link_id": curtain.link_id,
+                    "name": curtain.name,
                     "description": curtain.description,
                     "created": curtain.created,
                     "curtain_type": curtain.curtain_type,
@@ -231,6 +232,7 @@ class CurtainCollectionSerializer(serializers.ModelSerializer):
                 accessible.append({
                     "id": curtain.id,
                     "link_id": curtain.link_id,
+                    "name": curtain.name,
                     "description": curtain.description,
                     "created": curtain.created,
                     "curtain_type": curtain.curtain_type,
