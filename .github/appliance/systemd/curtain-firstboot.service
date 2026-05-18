@@ -1,0 +1,14 @@
+[Unit]
+Description=Curtain First Boot Setup
+After=network-online.target local-fs.target
+Wants=network-online.target
+Before=curtain-backend.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+ExecStart=/opt/curtain/first-boot.sh
+
+[Install]
+WantedBy=multi-user.target

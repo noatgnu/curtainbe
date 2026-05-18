@@ -1,0 +1,13 @@
+[Unit]
+Description=Publish curtainptm.local mDNS record
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/curtain-ptm-mdns
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+[Unit]
+Description=Curtain RQ Worker
+After=curtain-backend.service
+Requires=curtain-backend.service
+
+[Service]
+Type=simple
+User=curtain-svc
+Group=curtain-svc
+WorkingDirectory=/opt/curtain/backend
+EnvironmentFile=/opt/curtain/.env
+ExecStart=/opt/curtain/venv/bin/python manage.py rqworker default
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

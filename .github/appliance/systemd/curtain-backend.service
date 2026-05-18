@@ -1,0 +1,20 @@
+[Unit]
+Description=Curtain Django Backend
+After=network.target postgresql.service redis-server.service curtain-firstboot.service
+Requires=postgresql.service redis-server.service
+Wants=curtain-firstboot.service
+
+[Service]
+Type=simple
+User=curtain-svc
+Group=curtain-svc
+WorkingDirectory=/opt/curtain/backend
+EnvironmentFile=/opt/curtain/.env
+ExecStart=/opt/curtain/venv/bin/gunicorn curtainbe.asgi:application \
+    --bind 127.0.0.1:8000 --workers 4 --timeout 300 \
+    -k uvicorn.workers.UvicornWorker --log-level info
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
