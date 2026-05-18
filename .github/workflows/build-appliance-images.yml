@@ -385,46 +385,46 @@ jobs:
         run: |
           mkdir -p pi-gen/stage2a/00-install-curtain
 
-          # Stage these alongside the scripts — GITHUB_WORKSPACE is not preserved
-          # under `sudo -E ./build.sh`, so scripts must not reference it at runtime.
           cp -r .github/appliance       pi-gen/stage2a/00-install-curtain/appliance
           cp -r frontend/curtain        pi-gen/stage2a/00-install-curtain/fe-curtain
           cp -r frontend/curtainptm     pi-gen/stage2a/00-install-curtain/fe-curtainptm
 
-          cat > pi-gen/stage2a/prerun.sh << 'EOF'
+          # Embed the absolute path at generation time — pi-gen runs scripts from its
+          # own work directory, so runtime path discovery is unreliable under sudo.
+          STAGE_PATH="${GITHUB_WORKSPACE}/pi-gen/stage2a/00-install-curtain"
+
+          cat > pi-gen/stage2a/prerun.sh << 'PREEOF'
           #!/bin/bash -e
           if [ ! -d "${ROOTFS_DIR}" ]; then
             copy_previous
           fi
-          EOF
+          PREEOF
 
-          cat > pi-gen/stage2a/00-install-curtain/00-run.sh << 'EOF'
+          cat > pi-gen/stage2a/00-install-curtain/00-run.sh << EOF
           #!/bin/bash -e
-          SELF_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
-
           echo "=== CURTAIN: copying frontend files ==="
-          mkdir -p "${ROOTFS_DIR}/opt/curtain/curtain"
-          mkdir -p "${ROOTFS_DIR}/opt/curtain/curtainptm"
-          cp -rT "${SELF_DIR}/fe-curtain"    "${ROOTFS_DIR}/opt/curtain/curtain"
-          cp -rT "${SELF_DIR}/fe-curtainptm" "${ROOTFS_DIR}/opt/curtain/curtainptm"
+          mkdir -p "\${ROOTFS_DIR}/opt/curtain/curtain"
+          mkdir -p "\${ROOTFS_DIR}/opt/curtain/curtainptm"
+          cp -rT "${STAGE_PATH}/fe-curtain"    "\${ROOTFS_DIR}/opt/curtain/curtain"
+          cp -rT "${STAGE_PATH}/fe-curtainptm" "\${ROOTFS_DIR}/opt/curtain/curtainptm"
 
-          CURTAIN_TITLE=$(grep -o '<title>[^<]*</title>' \
-            "${ROOTFS_DIR}/opt/curtain/curtain/index.html" 2>/dev/null || echo "MISSING")
-          CURTAINPTM_TITLE=$(grep -o '<title>[^<]*</title>' \
-            "${ROOTFS_DIR}/opt/curtain/curtainptm/index.html" 2>/dev/null || echo "MISSING")
-          echo "Curtain title: ${CURTAIN_TITLE}"
-          echo "CurtainPTM title: ${CURTAINPTM_TITLE}"
-          [ "${CURTAIN_TITLE}"    = "<title>Curtain 2.0</title>" ] || { echo "ERROR: curtain wrong title";    exit 1; }
-          [ "${CURTAINPTM_TITLE}" = "<title>CurtainPTM</title>"  ] || { echo "ERROR: curtainptm wrong title"; exit 1; }
+          CURTAIN_TITLE=\$(grep -o '<title>[^<]*</title>' \\
+            "\${ROOTFS_DIR}/opt/curtain/curtain/index.html" 2>/dev/null || echo "MISSING")
+          CURTAINPTM_TITLE=\$(grep -o '<title>[^<]*</title>' \\
+            "\${ROOTFS_DIR}/opt/curtain/curtainptm/index.html" 2>/dev/null || echo "MISSING")
+          echo "Curtain title: \${CURTAIN_TITLE}"
+          echo "CurtainPTM title: \${CURTAINPTM_TITLE}"
+          [ "\${CURTAIN_TITLE}"    = "<title>Curtain 2.0</title>" ] || { echo "ERROR: curtain wrong title";    exit 1; }
+          [ "\${CURTAINPTM_TITLE}" = "<title>CurtainPTM</title>"  ] || { echo "ERROR: curtainptm wrong title"; exit 1; }
 
           echo "=== CURTAIN: cloning backend ==="
-          git clone --depth 1 --branch CURTAIN_BACKEND_REF_PLACEHOLDER \
-            https://github.com/noatgnu/curtainbe.git \
-            "${ROOTFS_DIR}/opt/curtain/backend"
+          git clone --depth 1 --branch CURTAIN_BACKEND_REF_PLACEHOLDER \\
+            https://github.com/noatgnu/curtainbe.git \\
+            "\${ROOTFS_DIR}/opt/curtain/backend"
 
           echo "=== CURTAIN: copying appliance configs ==="
-          mkdir -p "${ROOTFS_DIR}/tmp/appliance"
-          cp -r "${SELF_DIR}/appliance/." "${ROOTFS_DIR}/tmp/appliance/"
+          mkdir -p "\${ROOTFS_DIR}/tmp/appliance"
+          cp -r "${STAGE_PATH}/appliance/." "\${ROOTFS_DIR}/tmp/appliance/"
           echo "=== CURTAIN: 00-run.sh complete ==="
           EOF
 
