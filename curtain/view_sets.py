@@ -920,6 +920,11 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                     )
                     if data_cite.status == "published":
                         client.show_doi(doi=data_cite.doi)
+                        if data_cite.curtain:
+                            data_cite.curtain.permanent = True
+                            data_cite.curtain.save(update_fields=["permanent"])
+                        if data_cite.collection:
+                            data_cite.collection.curtains.filter(permanent=False).update(permanent=True)
                     data_cite.save()
                     data_cite.send_notification()
                     return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_200_OK)
