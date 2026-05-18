@@ -177,19 +177,7 @@ jobs:
           sudo ip link set "$NIC" up
           echo "Bridge NIC configured: $NIC -> 10.0.5.10"
           ENDSSH
-          echo "10.0.5.10 curtain.local curtainptm.local" | sudo tee -a /etc/hosts
-
-      - name: mDNS check
-        run: |
-          for i in $(seq 1 30); do
-            C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
-            PTM_IP=$(getent hosts curtainptm.local 2>/dev/null | awk '{print $1}')
-            if [ -n "$C_IP" ] && [ -n "$PTM_IP" ]; then
-              echo "OK: curtain.local=$C_IP curtainptm.local=$PTM_IP"; exit 0
-            fi
-            sleep 2
-          done
-          echo "FAIL: curtain.local=${C_IP:-missing} curtainptm.local=${PTM_IP:-missing}"; exit 1
+          echo "10.0.5.10 curtainptm.local" | sudo tee -a /etc/hosts
 
       - name: Copy frontends to VM
         run: |
@@ -240,6 +228,18 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
             "sudo BACKEND_REF=${BACKEND_REF} /tmp/appliance/provision.sh"
 
+      - name: mDNS check
+        run: |
+          for i in $(seq 1 30); do
+            C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
+            PTM_IP=$(getent hosts curtainptm.local 2>/dev/null | awk '{print $1}')
+            if [ -n "$C_IP" ] && [ -n "$PTM_IP" ]; then
+              echo "OK: curtain.local=$C_IP curtainptm.local=$PTM_IP"; exit 0
+            fi
+            sleep 2
+          done
+          echo "FAIL: curtain.local=${C_IP:-missing} curtainptm.local=${PTM_IP:-missing}"; exit 1
+
       - name: Start backend services
         timeout-minutes: 5
         run: |
@@ -262,10 +262,23 @@ jobs:
         run: |
           fail() { echo "FAIL: $*"; exit 1; }
 
+          for i in $(seq 1 30); do
+            C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
+            PTM_IP=$(getent hosts curtainptm.local 2>/dev/null | awk '{print $1}')
+            if [ -n "$C_IP" ] && [ -n "$PTM_IP" ]; then
+              echo "curtain.local -> $C_IP"
+              echo "curtainptm.local -> $PTM_IP"
+              RESOLVED=true
+              break
+            fi
+            sleep 2
+          done
+          [ "${RESOLVED:-false}" = "true" ] || fail "mDNS did not resolve curtain.local or curtainptm.local"
+
           CURTAIN=$(curl -sfk https://curtain.local/) \
-            || fail "curtain.local did not return 200"
+            || fail "curtain.local ($C_IP) did not return 200"
           CURTAINPTM=$(curl -sfk https://curtainptm.local/) \
-            || fail "curtainptm.local did not return 200"
+            || fail "curtainptm.local ($PTM_IP) did not return 200"
 
           echo "$CURTAIN" | grep -q "<title>Curtain 2.0</title>" \
             || fail "curtain.local wrong title — got: $(echo "$CURTAIN" | grep -o '<title>[^<]*</title>')"
