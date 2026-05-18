@@ -98,18 +98,19 @@ jobs:
       - name: Fix /dev/kvm permissions
         run: sudo chmod 666 /dev/kvm 2>/dev/null || true
 
-      - name: Setup bridge network
+      - name: Setup test bridge network
         run: |
           sudo ip link add br0 type bridge stp_state 0 forward_delay 0
+          sudo ip link set br0 promisc on
           sudo ip link set br0 type bridge mcast_snooping 0
           sudo ip link set br0 up
           sudo ip addr add 10.0.5.1/24 dev br0
           sudo ip tuntap add dev curtain-tap mode tap
           sudo ip link set curtain-tap master br0
+          sudo ip link set curtain-tap promisc on
           sudo ip link set curtain-tap up
           sudo systemctl restart avahi-daemon
           sudo sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' /etc/nsswitch.conf
-          echo "10.0.5.10 curtain.local curtainptm.local" | sudo tee -a /etc/hosts
 
       - name: Generate SSH key
         run: |
@@ -167,7 +168,7 @@ jobs:
       - name: Configure bridge NIC on VM
         run: |
           ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost << 'ENDSSH'
-          NIC=$(ip -o link show | awk -F': ' '{print $2}' | while read iface; do
+          NIC=$(ip -o link show | awk -F': ' '!/LOOPBACK/{print $2}' | while read iface; do
             [ "$iface" = lo ] && continue
             ip -4 addr show "$iface" 2>/dev/null | grep -q 'inet ' || echo "$iface"
           done | head -1)
@@ -176,6 +177,19 @@ jobs:
           sudo ip link set "$NIC" up
           echo "Bridge NIC configured: $NIC -> 10.0.5.10"
           ENDSSH
+          echo "10.0.5.10 curtain.local curtainptm.local" | sudo tee -a /etc/hosts
+
+      - name: mDNS check
+        run: |
+          for i in $(seq 1 30); do
+            C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
+            PTM_IP=$(getent hosts curtainptm.local 2>/dev/null | awk '{print $1}')
+            if [ -n "$C_IP" ] && [ -n "$PTM_IP" ]; then
+              echo "OK: curtain.local=$C_IP curtainptm.local=$PTM_IP"; exit 0
+            fi
+            sleep 2
+          done
+          echo "FAIL: curtain.local=${C_IP:-missing} curtainptm.local=${PTM_IP:-missing}"; exit 1
 
       - name: Copy frontends to VM
         run: |
@@ -248,9 +262,9 @@ jobs:
         run: |
           fail() { echo "FAIL: $*"; exit 1; }
 
-          CURTAIN=$(curl -sfk --resolve "curtain.local:443:10.0.5.10" https://curtain.local/) \
+          CURTAIN=$(curl -sfk https://curtain.local/) \
             || fail "curtain.local did not return 200"
-          CURTAINPTM=$(curl -sfk --resolve "curtainptm.local:443:10.0.5.10" https://curtainptm.local/) \
+          CURTAINPTM=$(curl -sfk https://curtainptm.local/) \
             || fail "curtainptm.local did not return 200"
 
           echo "$CURTAIN" | grep -q "<title>Curtain 2.0</title>" \
@@ -258,7 +272,7 @@ jobs:
           echo "$CURTAINPTM" | grep -q "<title>CurtainPTM</title>" \
             || fail "curtainptm.local wrong title — got: $(echo "$CURTAINPTM" | grep -o '<title>[^<]*</title>')"
 
-          API=$(curl -sk --resolve "curtain.local:443:10.0.5.10" -o /dev/null -w "%{http_code}" https://curtain.local/api/)
+          API=$(curl -sk -o /dev/null -w "%{http_code}" https://curtain.local/api/)
           echo "$API" | grep -qE "^[234]" \
             || fail "API at curtain.local returned unexpected status $API"
 
