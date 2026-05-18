@@ -39,7 +39,7 @@ jobs:
           git clone --depth 1 --branch "$CURTAIN_REF" https://github.com/noatgnu/curtain.git /tmp/curtain
           cd /tmp/curtain
           npm install
-          npx ng build CurtainTwo --configuration=docker --base-href /
+          npx ng build CurtainTwo --configuration=appliance --base-href /
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtain"
           cp -r dist/browser/* "$GITHUB_WORKSPACE/frontend/curtain/"
 
@@ -50,7 +50,7 @@ jobs:
           git clone --depth 1 --branch "$CURTAINPTM_REF" https://github.com/noatgnu/curtainPTM.git /tmp/curtainptm
           cd /tmp/curtainptm
           npm install
-          npx ng build curtainPTM2 --configuration=docker --base-href /
+          npx ng build curtainPTM2 --configuration=appliance --base-href /
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtainptm"
           cp -r dist/browser/* "$GITHUB_WORKSPACE/frontend/curtainptm/"
 
