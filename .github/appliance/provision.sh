@@ -81,4 +81,5 @@ chown root:curtain-svc /opt/curtain/.env
 chmod 640 /opt/curtain/.env
 
 service postgresql restart
-systemctl start nginx redis-server
+systemctl restart nginx
+systemctl start redis-server
