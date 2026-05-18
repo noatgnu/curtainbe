@@ -1,0 +1,1219 @@
+name: Build Appliance Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_type:
+        description: 'Image type'
+        type: choice
+        default: 'both'
+        options: [vm, rpi, both]
+      backend_ref:
+        description: 'Backend branch/tag (curtainbe)'
+        type: string
+        default: 'master'
+      curtain_ref:
+        description: 'Curtain frontend branch/tag'
+        type: string
+        default: 'master'
+      curtainptm_ref:
+        description: 'CurtainPTM frontend branch/tag'
+        type: string
+        default: 'master'
+
+jobs:
+  build-frontend:
+    name: Pre-build Frontends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build curtain frontend
+        env:
+          CURTAIN_REF: ${{ inputs.curtain_ref || 'master' }}
+        run: |
+          git clone --depth 1 --branch "$CURTAIN_REF" https://github.com/noatgnu/curtain.git /tmp/curtain
+          cd /tmp/curtain
+          npm ci
+          npx ng build CurtainTwo --configuration=production --base-href /
+          mkdir -p "$GITHUB_WORKSPACE/frontend/curtain"
+          cp -r dist/CurtainTwo/browser/* "$GITHUB_WORKSPACE/frontend/curtain/"
+
+      - name: Build curtainPTM frontend
+        env:
+          CURTAINPTM_REF: ${{ inputs.curtainptm_ref || 'master' }}
+        run: |
+          git clone --depth 1 --branch "$CURTAINPTM_REF" https://github.com/noatgnu/curtainPTM.git /tmp/curtainptm
+          cd /tmp/curtainptm
+          npm ci
+          npx ng build curtainPTM2 --configuration=production --base-href /
+          mkdir -p "$GITHUB_WORKSPACE/frontend/curtainptm"
+          cp -r dist/curtainPTM2/browser/* "$GITHUB_WORKSPACE/frontend/curtainptm/"
+
+      - name: Upload curtain frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: curtain-frontend
+          path: frontend/curtain/
+          retention-days: 1
+
+      - name: Upload curtainPTM frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: curtainptm-frontend
+          path: frontend/curtainptm/
+          retention-days: 1
+
+  build-vm:
+    name: VM Image (amd64)
+    if: inputs.image_type != 'rpi'
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download curtain frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: curtain-frontend
+          path: frontend/curtain
+
+      - name: Download curtainPTM frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: curtainptm-frontend
+          path: frontend/curtainptm
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qemu-system-x86 qemu-utils cloud-image-utils genisoimage wget openssh-client \
+            iproute2 avahi-daemon avahi-utils libnss-mdns
+
+      - name: Fix /dev/kvm permissions
+        run: sudo chmod 666 /dev/kvm 2>/dev/null || true
+
+      - name: Setup bridge network
+        run: |
+          sudo ip link add br0 type bridge stp_state 0 forward_delay 0
+          sudo ip link set br0 type bridge mcast_snooping 0
+          sudo ip link set br0 up
+          sudo ip addr add 10.0.5.1/24 dev br0
+          sudo ip tuntap add dev curtain-tap mode tap
+          sudo ip link set curtain-tap master br0
+          sudo ip link set curtain-tap up
+          sudo systemctl restart avahi-daemon
+          sudo sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' /etc/nsswitch.conf
+          echo "10.0.5.10 curtain.local curtainptm.local" | sudo tee -a /etc/hosts
+
+      - name: Generate SSH key
+        run: |
+          ssh-keygen -t ed25519 -f curtkey -N '' -q
+          echo "SSH_PUBKEY=$(cat curtkey.pub)" >> $GITHUB_ENV
+
+      - name: Download Ubuntu cloud image
+        run: |
+          wget -q "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" -O vm-disk.qcow2
+          qemu-img resize vm-disk.qcow2 20G
+
+      - name: Create cloud-init seed
+        run: |
+          cat > ci-user-data << CIEOF
+          #cloud-config
+          users:
+            - name: curtain
+              groups: sudo
+              shell: /bin/bash
+              sudo: "ALL=(ALL) NOPASSWD:ALL"
+              ssh_authorized_keys:
+                - ${SSH_PUBKEY}
+          CIEOF
+          printf 'instance-id: curtain-appliance\nlocal-hostname: curtain\n' > ci-meta-data
+          cloud-localds seed.iso ci-user-data ci-meta-data
+
+      - name: Boot VM and wait for SSH
+        timeout-minutes: 10
+        run: |
+          qemu-system-x86_64 \
+            -m 4096 -smp 2 \
+            -drive file=vm-disk.qcow2,format=qcow2,if=virtio \
+            -drive file=seed.iso,format=raw,if=virtio \
+            -netdev user,id=net0,hostfwd=tcp::2222-:22,hostfwd=tcp::8080-:80,hostfwd=tcp::8443-:443 \
+            -device virtio-net-pci,netdev=net0 \
+            -netdev tap,id=net1,ifname=curtain-tap,script=no,downscript=no \
+            -device virtio-net-pci,netdev=net1 \
+            -machine type=pc,accel=kvm -cpu host \
+            -display none -serial file:serial.log &
+          QEMU_PID=$!
+          echo "QEMU_PID=$QEMU_PID" >> $GITHUB_ENV
+
+          for i in $(seq 1 60); do
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=3 -i curtkey -p 2222 curtain@localhost 'echo OK' 2>/dev/null; then
+              echo "SSH ready (${i}x5s)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "=== SSH never came up. Serial console output: ==="
+          cat serial.log 2>/dev/null | tail -50
+          kill $QEMU_PID 2>/dev/null || true
+          exit 1
+
+      - name: Configure bridge NIC on VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost << 'ENDSSH'
+          NIC=$(ip -o link show | awk -F': ' '{print $2}' | while read iface; do
+            [ "$iface" = lo ] && continue
+            ip -4 addr show "$iface" 2>/dev/null | grep -q 'inet ' || echo "$iface"
+          done | head -1)
+          if [ -z "$NIC" ]; then echo "ERROR: bridge NIC not found"; ip link show; exit 1; fi
+          sudo ip addr add 10.0.5.10/24 dev "$NIC"
+          sudo ip link set "$NIC" up
+          echo "Bridge NIC configured: $NIC -> 10.0.5.10"
+          ENDSSH
+
+      - name: Copy frontends to VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
+            "sudo mkdir -p /opt/curtain/curtain /opt/curtain/curtainptm"
+          tar -C "$GITHUB_WORKSPACE/frontend/curtain" -czf /tmp/curtain-fe.tar.gz .
+          tar -C "$GITHUB_WORKSPACE/frontend/curtainptm" -czf /tmp/curtainptm-fe.tar.gz .
+          scp -o StrictHostKeyChecking=no -i curtkey -P 2222 \
+            /tmp/curtain-fe.tar.gz /tmp/curtainptm-fe.tar.gz curtain@localhost:/tmp/
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost "
+            sudo tar -xzf /tmp/curtain-fe.tar.gz -C /opt/curtain/curtain/ &&
+            sudo tar -xzf /tmp/curtainptm-fe.tar.gz -C /opt/curtain/curtainptm/
+          "
+
+      - name: Write provision script
+        env:
+          BACKEND_REF: ${{ inputs.backend_ref || 'master' }}
+        run: |
+          cat > /tmp/provision.sh << 'SCRIPT'
+          #!/bin/bash
+          set -e
+
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            postgresql postgresql-client redis-server nginx \
+            python3 python3-venv python3-dev libpq-dev \
+            avahi-daemon avahi-utils git curl python3-zeroconf
+
+          systemctl enable postgresql redis-server nginx avahi-daemon
+          sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns myhostname/' /etc/nsswitch.conf
+
+          mkdir -p /opt/curtain/{backend,static,media,venv,curtain,curtainptm}
+          mkdir -p /var/log/curtain
+
+          useradd -r -s /usr/sbin/nologin -M -d /opt/curtain curtain-svc || true
+          usermod -aG www-data curtain-svc
+
+          service postgresql start
+          su - postgres -c "psql -c \"CREATE USER curtain_user WITH PASSWORD 'curtain_pass';\"" || true
+          su - postgres -c "psql -c \"CREATE DATABASE curtain_db OWNER curtain_user;\"" || true
+          su - postgres -c "psql -c \"ALTER USER curtain_user CREATEDB;\"" || true
+
+          python3 -m venv /opt/curtain/venv
+          /opt/curtain/venv/bin/pip install --upgrade pip --quiet
+
+          git clone --depth 1 --branch "${BACKEND_REF}" \
+            https://github.com/noatgnu/curtainbe.git /opt/curtain/backend
+
+          /opt/curtain/venv/bin/pip install -r /opt/curtain/backend/requirements.txt --quiet
+          /opt/curtain/venv/bin/pip install gunicorn "uvicorn[standard]" psycopg2-binary --quiet
+
+          cat > /opt/curtain/.env << 'DOTENV'
+          WORKING_ENV=PRODUCTION
+          POSTGRES_NAME=curtain_db
+          POSTGRES_USER=curtain_user
+          POSTGRES_PASSWORD=curtain_pass
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          REDIS_HOST=127.0.0.1
+          REDIS_PORT=6379
+          REDIS_DB=0
+          REDIS_PASSWORD=
+          SECRET_KEY=CHANGE-ON-FIRST-BOOT
+          DJANGO_ALLOWED_HOSTS=curtain.local,curtainptm.local,localhost,127.0.0.1
+          DJANGO_CORS_WHITELIST=http://curtain.local,https://curtain.local,http://curtainptm.local,https://curtainptm.local,http://localhost
+          CURTAIN_ALLOW_NON_USER_POST=1
+          CURTAIN_DEFAULT_USER_LINK_LIMIT=100
+          CURTAIN_DEFAULT_USER_CAN_POST=1
+          DOTENV
+
+          cd /opt/curtain/backend
+          set -a; source /opt/curtain/.env; set +a
+          /opt/curtain/venv/bin/python manage.py migrate --noinput
+          /opt/curtain/venv/bin/python manage.py collectstatic --noinput
+          DJANGO_SUPERUSER_USERNAME=admin \
+          DJANGO_SUPERUSER_EMAIL=admin@curtain.local \
+          DJANGO_SUPERUSER_PASSWORD=curtain \
+          /opt/curtain/venv/bin/python manage.py createsuperuser --noinput
+
+          mkdir -p /etc/ssl/curtain
+          openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout /etc/ssl/curtain/curtain.key \
+            -out /etc/ssl/curtain/curtain.crt \
+            -subj "/CN=curtain.local/O=Curtain Appliance" \
+            -addext "subjectAltName=DNS:curtain.local,DNS:curtainptm.local,DNS:localhost,IP:127.0.0.1"
+          chmod 640 /etc/ssl/curtain/curtain.key
+
+          cat > /etc/nginx/snippets/curtain-ssl.conf << 'SSLEOF'
+          ssl_certificate     /etc/ssl/curtain/curtain.crt;
+          ssl_certificate_key /etc/ssl/curtain/curtain.key;
+          ssl_protocols       TLSv1.2 TLSv1.3;
+          ssl_ciphers         HIGH:!aNULL:!MD5;
+          SSLEOF
+
+          cat > /etc/nginx/conf.d/curtain-upstream.conf << 'NGXUPEOF'
+          upstream curtain_backend {
+              server 127.0.0.1:8000;
+          }
+          NGXUPEOF
+
+          cat > /etc/nginx/sites-available/curtain.conf << 'NGXEOF'
+          server {
+              listen 80 default_server;
+              listen 443 ssl default_server;
+              server_name curtain.local curtain localhost _;
+              include /etc/nginx/snippets/curtain-ssl.conf;
+              client_max_body_size 2G;
+              root /opt/curtain/curtain;
+              index index.html;
+              gzip on;
+              gzip_types text/css application/javascript application/json image/svg+xml;
+              location / { try_files $uri $uri/ /index.html; }
+              location /api/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_read_timeout 300s;
+              }
+              location /admin/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+              location /ws/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_set_header Host $host;
+                  proxy_read_timeout 86400s;
+              }
+              location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
+              location /media/ { alias /opt/curtain/media/; }
+          }
+          NGXEOF
+
+          cat > /etc/nginx/sites-available/curtainptm.conf << 'NGXEOF'
+          server {
+              listen 80;
+              listen 443 ssl;
+              server_name curtainptm.local curtainptm;
+              include /etc/nginx/snippets/curtain-ssl.conf;
+              client_max_body_size 2G;
+              root /opt/curtain/curtainptm;
+              index index.html;
+              gzip on;
+              gzip_types text/css application/javascript application/json image/svg+xml;
+              location / { try_files $uri $uri/ /index.html; }
+              location /api/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_read_timeout 300s;
+              }
+              location /admin/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+              location /ws/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_set_header Host $host;
+                  proxy_read_timeout 86400s;
+              }
+              location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
+              location /media/ { alias /opt/curtain/media/; }
+          }
+          NGXEOF
+
+          ln -sf /etc/nginx/sites-available/curtain.conf /etc/nginx/sites-enabled/
+          ln -sf /etc/nginx/sites-available/curtainptm.conf /etc/nginx/sites-enabled/
+          rm -f /etc/nginx/sites-enabled/default
+          nginx -t
+
+          cat > /usr/local/bin/curtain-ptm-mdns << 'PYEOF'
+          #!/usr/bin/env python3
+          import socket
+          import time
+          from zeroconf import Zeroconf, ServiceInfo
+
+          def get_local_ip():
+              s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+              try:
+                  s.connect(('10.255.255.255', 1))
+                  return s.getsockname()[0]
+              except Exception:
+                  return '127.0.0.1'
+              finally:
+                  s.close()
+
+          def main():
+              ip = get_local_ip()
+              zc = Zeroconf()
+              info = ServiceInfo(
+                  "_http._tcp.local.",
+                  "CurtainPTM._http._tcp.local.",
+                  addresses=[socket.inet_aton(ip)],
+                  port=80,
+                  server="curtainptm.local."
+              )
+              zc.register_service(info)
+              try:
+                  while True:
+                      time.sleep(1)
+              except KeyboardInterrupt:
+                  pass
+              finally:
+                  zc.unregister_service(info)
+                  zc.close()
+
+          if __name__ == '__main__':
+              main()
+          PYEOF
+          chmod +x /usr/local/bin/curtain-ptm-mdns
+
+          cat > /etc/avahi/services/curtain.service << 'AVHEOF'
+          <?xml version="1.0" standalone='no'?>
+          <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+          <service-group>
+            <name>Curtain Appliance</name>
+            <service>
+              <type>_http._tcp</type>
+              <port>80</port>
+              <txt-record>path=/</txt-record>
+            </service>
+          </service-group>
+          AVHEOF
+
+          cat > /opt/curtain/first-boot.sh << 'FBEOF'
+          #!/bin/bash
+          set -e
+          LOG=/var/log/curtain/first-boot.log
+          mkdir -p /var/log/curtain
+          exec > >(tee -a "$LOG") 2>&1
+          echo "=== first-boot.sh started $(date -u) ==="
+          ENV_FILE=/opt/curtain/.env
+          if grep -q "^SECRET_KEY=CHANGE-ON-FIRST-BOOT" "$ENV_FILE"; then
+              SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
+              sed -i "s|^SECRET_KEY=CHANGE-ON-FIRST-BOOT|SECRET_KEY=${SECRET_KEY}|" "$ENV_FILE"
+              echo "SECRET_KEY generated"
+          fi
+          echo "=== first-boot.sh completed $(date -u) ==="
+          FBEOF
+          chmod +x /opt/curtain/first-boot.sh
+
+          cat > /etc/systemd/system/curtain-firstboot.service << 'UNITEOF'
+          [Unit]
+          Description=Curtain First Boot Setup
+          After=network-online.target local-fs.target
+          Wants=network-online.target
+          Before=curtain-backend.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          User=root
+          ExecStart=/opt/curtain/first-boot.sh
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          cat > /etc/systemd/system/curtain-backend.service << 'UNITEOF'
+          [Unit]
+          Description=Curtain Django Backend
+          After=network.target postgresql.service redis-server.service curtain-firstboot.service
+          Requires=postgresql.service redis-server.service
+          Wants=curtain-firstboot.service
+
+          [Service]
+          Type=simple
+          User=curtain-svc
+          Group=curtain-svc
+          WorkingDirectory=/opt/curtain/backend
+          EnvironmentFile=/opt/curtain/.env
+          ExecStart=/opt/curtain/venv/bin/gunicorn curtainbe.asgi:application \
+              --bind 127.0.0.1:8000 --workers 4 --timeout 300 \
+              -k uvicorn.workers.UvicornWorker --log-level info
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          cat > /etc/systemd/system/curtain-rqworker.service << 'UNITEOF'
+          [Unit]
+          Description=Curtain RQ Worker
+          After=curtain-backend.service
+          Requires=curtain-backend.service
+
+          [Service]
+          Type=simple
+          User=curtain-svc
+          Group=curtain-svc
+          WorkingDirectory=/opt/curtain/backend
+          EnvironmentFile=/opt/curtain/.env
+          ExecStart=/opt/curtain/venv/bin/python manage.py rqworker default
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          cat > /etc/systemd/system/curtain-ptm-mdns.service << 'UNITEOF'
+          [Unit]
+          Description=Publish curtainptm.local mDNS record
+          After=network-online.target avahi-daemon.service
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/curtain-ptm-mdns
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          systemctl enable curtain-firstboot curtain-backend curtain-rqworker curtain-ptm-mdns
+
+          chown -R curtain-svc:curtain-svc /opt/curtain /var/log/curtain
+          chown root:curtain-svc /opt/curtain/.env
+          chmod 640 /opt/curtain/.env
+
+          service postgresql restart
+          systemctl start nginx redis-server
+          SCRIPT
+          sed -i "s|\${BACKEND_REF}|${BACKEND_REF}|g" /tmp/provision.sh
+          chmod +x /tmp/provision.sh
+
+      - name: Provision VM
+        timeout-minutes: 20
+        run: |
+          scp -o StrictHostKeyChecking=no -i curtkey -P 2222 /tmp/provision.sh curtain@localhost:/tmp/
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
+            "sudo /tmp/provision.sh"
+
+      - name: Start backend services
+        timeout-minutes: 5
+        run: |
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
+            "sudo systemctl start curtain-backend"
+          for i in $(seq 1 30); do
+            code=$(ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
+              "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/" 2>/dev/null) || true
+            if echo "$code" | grep -qE "^[234][0-9][0-9]$"; then
+              echo "Backend ready after ${i}x5s"
+              break
+            fi
+            sleep 5
+          done
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
+            "sudo systemctl start curtain-rqworker"
+
+      - name: Smoke test
+        timeout-minutes: 10
+        run: |
+          fail() { echo "FAIL: $*"; exit 1; }
+
+          CURTAIN=$(curl -sfk --resolve "curtain.local:443:10.0.5.10" https://curtain.local/) \
+            || fail "curtain.local did not return 200"
+          CURTAINPTM=$(curl -sfk --resolve "curtainptm.local:443:10.0.5.10" https://curtainptm.local/) \
+            || fail "curtainptm.local did not return 200"
+
+          echo "$CURTAIN" | grep -q "<title>Curtain 2.0</title>" \
+            || fail "curtain.local wrong title — got: $(echo "$CURTAIN" | grep -o '<title>[^<]*</title>')"
+          echo "$CURTAINPTM" | grep -q "<title>CurtainPTM</title>" \
+            || fail "curtainptm.local wrong title — got: $(echo "$CURTAINPTM" | grep -o '<title>[^<]*</title>')"
+
+          API=$(curl -sk --resolve "curtain.local:443:10.0.5.10" -o /dev/null -w "%{http_code}" https://curtain.local/api/)
+          echo "$API" | grep -qE "^[234]" \
+            || fail "API at curtain.local returned unexpected status $API"
+
+          echo "PASS: curtain.local and curtainptm.local serve correct frontends, API responds"
+
+      - name: Remove CI SSH key
+        run: |
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
+            "sudo rm -f /home/curtain/.ssh/authorized_keys"
+
+      - name: Shutdown VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
+            'sudo shutdown -P now' 2>/dev/null || true
+          for i in $(seq 1 60); do
+            if ! kill -0 $QEMU_PID 2>/dev/null; then
+              echo "QEMU exited after ${i}x3s"
+              break
+            fi
+            sleep 3
+          done
+          kill $QEMU_PID 2>/dev/null || true
+          sleep 2
+
+      - name: Compact and compress
+        run: |
+          qemu-img convert -O qcow2 -c vm-disk.qcow2 curtain-vm-amd64.qcow2
+          xz -3 curtain-vm-amd64.qcow2
+          ls -lh curtain-vm-amd64.qcow2.xz
+
+      - name: Upload VM image
+        uses: actions/upload-artifact@v4
+        with:
+          name: curtain-vm-amd64
+          path: curtain-vm-amd64.qcow2.xz
+          retention-days: 7
+          compression-level: 0
+
+  build-rpi:
+    name: RPi Image (arm64)
+    if: inputs.image_type != 'vm'
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download curtain frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: curtain-frontend
+          path: frontend/curtain
+
+      - name: Download curtainPTM frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: curtainptm-frontend
+          path: frontend/curtainptm
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/lib/python*
+          sudo apt-get clean
+          df -h
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            coreutils quilt debootstrap zerofree zip dosfstools \
+            libarchive-tools rsync xz-utils file git curl bc gpg pigz \
+            qemu-user-static binfmt-support arch-test debian-archive-keyring
+
+      - name: Enable ARM64 emulation
+        run: |
+          sudo modprobe binfmt_misc
+          sudo update-binfmts --enable qemu-aarch64 || true
+          /usr/bin/qemu-aarch64-static --version
+
+      - name: Clone pi-gen
+        run: git clone --depth 1 --branch arm64 https://github.com/RPi-Distro/pi-gen.git
+
+      - name: Patch pi-gen for qemu-user-static compatibility
+        run: |
+          sed -i 's/qemu-arm:qemu-user-binfmt/qemu-arm-static:qemu-user-static/' pi-gen/depends
+          sudo ln -sf /usr/bin/qemu-arm-static /usr/local/bin/qemu-arm
+
+          cat >> pi-gen/stage0/prerun.sh << 'SCRIPT'
+          mkdir -p "${ROOTFS_DIR}/usr/share/keyrings"
+          cp /usr/share/keyrings/debian-archive-keyring.gpg \
+            "${ROOTFS_DIR}/usr/share/keyrings/debian-archive-keyring.pgp"
+          SCRIPT
+
+      - name: Create curtain stage
+        env:
+          BACKEND_REF: ${{ inputs.backend_ref || 'master' }}
+        run: |
+          mkdir -p pi-gen/stage2a/00-install-curtain
+
+          cat > pi-gen/stage2a/prerun.sh << 'EOF'
+          #!/bin/bash -e
+          if [ ! -d "${ROOTFS_DIR}" ]; then
+            copy_previous
+          fi
+          EOF
+
+          cat > pi-gen/stage2a/00-install-curtain/00-run.sh << 'EOF'
+          #!/bin/bash -e
+
+          echo "=== CURTAIN: copying frontend files ==="
+          mkdir -p "${ROOTFS_DIR}/opt/curtain/curtain"
+          mkdir -p "${ROOTFS_DIR}/opt/curtain/curtainptm"
+          cp -rT "${GITHUB_WORKSPACE}/frontend/curtain" "${ROOTFS_DIR}/opt/curtain/curtain"
+          cp -rT "${GITHUB_WORKSPACE}/frontend/curtainptm" "${ROOTFS_DIR}/opt/curtain/curtainptm"
+
+          CURTAIN_TITLE=$(grep -o '<title>[^<]*</title>' \
+            "${ROOTFS_DIR}/opt/curtain/curtain/index.html" 2>/dev/null || echo "MISSING")
+          CURTAINPTM_TITLE=$(grep -o '<title>[^<]*</title>' \
+            "${ROOTFS_DIR}/opt/curtain/curtainptm/index.html" 2>/dev/null || echo "MISSING")
+          echo "Curtain title: ${CURTAIN_TITLE}"
+          echo "CurtainPTM title: ${CURTAINPTM_TITLE}"
+
+          if [ "${CURTAIN_TITLE}" != "<title>Curtain 2.0</title>" ]; then
+            echo "ERROR: curtain has wrong title '${CURTAIN_TITLE}'"
+            exit 1
+          fi
+          if [ "${CURTAINPTM_TITLE}" != "<title>CurtainPTM</title>" ]; then
+            echo "ERROR: curtainptm has wrong title '${CURTAINPTM_TITLE}'"
+            exit 1
+          fi
+          echo "=== CURTAIN: frontend titles verified ==="
+
+          git clone --depth 1 --branch CURTAIN_BACKEND_REF_PLACEHOLDER \
+            https://github.com/noatgnu/curtainbe.git \
+            "${ROOTFS_DIR}/opt/curtain/backend"
+          echo "=== CURTAIN: 00-run.sh complete ==="
+          EOF
+
+          sed -i "s|CURTAIN_BACKEND_REF_PLACEHOLDER|${BACKEND_REF}|" \
+            pi-gen/stage2a/00-install-curtain/00-run.sh
+
+          cat > pi-gen/stage2a/00-install-curtain/01-run-chroot.sh << EOF
+          #!/bin/bash -e
+
+          echo "=== CURTAIN: pre-flight checks ==="
+          if [ ! -d /opt/curtain/backend ]; then
+            echo "FATAL: /opt/curtain/backend not found"
+            exit 1
+          fi
+          echo "=== CURTAIN: installing packages ==="
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y curl gpg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | gpg --dearmor -o /usr/share/keyrings/postgresql-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main" \
+            > /etc/apt/sources.list.d/pgdg.list
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            postgresql-16 postgresql-client-16 redis-server nginx \
+            python3 python3-venv python3-dev libpq-dev \
+            avahi-daemon avahi-utils git python3-zeroconf
+
+          systemctl --root=/ enable postgresql redis-server nginx avahi-daemon
+          sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns myhostname/' /etc/nsswitch.conf
+
+          echo "=== CURTAIN: creating users ==="
+          mkdir -p /opt/curtain/{static,media,venv,curtain,curtainptm}
+          mkdir -p /var/log/curtain
+
+          useradd -r -s /usr/sbin/nologin -M -d /opt/curtain curtain-svc || true
+          usermod -aG www-data curtain-svc
+          useradd -m -s /bin/bash curtain || true
+          echo 'curtain:curtain' | chpasswd
+          usermod -aG sudo curtain
+
+          echo "=== CURTAIN: setting up PostgreSQL ==="
+          service postgresql start || \\
+            pg_ctlcluster "\$(pg_lsclusters -h | head -1 | awk '{print \$1, \$2}')" start
+          su - postgres -c "psql -c \"CREATE USER curtain_user WITH PASSWORD 'curtain_pass';\"" || true
+          su - postgres -c "psql -c \"CREATE DATABASE curtain_db OWNER curtain_user;\"" || true
+          su - postgres -c "psql -c \"ALTER USER curtain_user CREATEDB;\"" || true
+          PG_HBA=\$(su - postgres -c "psql -t -c 'SHOW hba_file;'" | tr -d ' ')
+          sed -i 's/local[[:space:]]\\+all[[:space:]]\\+all[[:space:]]\\+peer/local   all             all                                     md5/' "\$PG_HBA"
+          sed -i 's/host[[:space:]]\\+all[[:space:]]\\+all[[:space:]]\\+127\\.0\\.0\\.1\\/32[[:space:]]\\+scram-sha-256/host    all             all             127.0.0.1\\/32            md5/' "\$PG_HBA"
+          service postgresql restart || \\
+            pg_ctlcluster "\$(pg_lsclusters -h | head -1 | awk '{print \$1, \$2}')" restart
+
+          echo "=== CURTAIN: Python venv ==="
+          python3 -m venv /opt/curtain/venv
+          /opt/curtain/venv/bin/pip install --upgrade pip --quiet
+          /opt/curtain/venv/bin/pip install -r /opt/curtain/backend/requirements.txt --quiet
+          /opt/curtain/venv/bin/pip install gunicorn "uvicorn[standard]" psycopg2-binary --quiet
+
+          cat > /opt/curtain/.env << 'DOTENV'
+          WORKING_ENV=PRODUCTION
+          POSTGRES_NAME=curtain_db
+          POSTGRES_USER=curtain_user
+          POSTGRES_PASSWORD=curtain_pass
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          REDIS_HOST=127.0.0.1
+          REDIS_PORT=6379
+          REDIS_DB=0
+          REDIS_PASSWORD=
+          SECRET_KEY=CHANGE-ON-FIRST-BOOT
+          DJANGO_ALLOWED_HOSTS=curtain.local,curtainptm.local,localhost,127.0.0.1
+          DJANGO_CORS_WHITELIST=http://curtain.local,https://curtain.local,http://curtainptm.local,https://curtainptm.local,http://localhost
+          CURTAIN_ALLOW_NON_USER_POST=1
+          CURTAIN_DEFAULT_USER_LINK_LIMIT=100
+          CURTAIN_DEFAULT_USER_CAN_POST=1
+          DOTENV
+
+          cd /opt/curtain/backend
+          set -a; source /opt/curtain/.env; set +a
+          /opt/curtain/venv/bin/python manage.py migrate --noinput
+          /opt/curtain/venv/bin/python manage.py collectstatic --noinput
+          DJANGO_SUPERUSER_USERNAME=admin \\
+          DJANGO_SUPERUSER_EMAIL=admin@curtain.local \\
+          DJANGO_SUPERUSER_PASSWORD=curtain \\
+          /opt/curtain/venv/bin/python manage.py createsuperuser --noinput
+
+          echo "=== CURTAIN: SSL certificate ==="
+          mkdir -p /etc/ssl/curtain
+          openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \\
+            -keyout /etc/ssl/curtain/curtain.key \\
+            -out /etc/ssl/curtain/curtain.crt \\
+            -subj "/CN=curtain.local/O=Curtain Appliance" \\
+            -addext "subjectAltName=DNS:curtain.local,DNS:curtainptm.local,DNS:localhost,IP:127.0.0.1"
+          chmod 640 /etc/ssl/curtain/curtain.key
+
+          cat > /etc/nginx/snippets/curtain-ssl.conf << 'SSLEOF'
+          ssl_certificate     /etc/ssl/curtain/curtain.crt;
+          ssl_certificate_key /etc/ssl/curtain/curtain.key;
+          ssl_protocols       TLSv1.2 TLSv1.3;
+          ssl_ciphers         HIGH:!aNULL:!MD5;
+          SSLEOF
+
+          cat > /etc/nginx/conf.d/curtain-upstream.conf << 'NGXUPEOF'
+          upstream curtain_backend {
+              server 127.0.0.1:8000;
+          }
+          NGXUPEOF
+
+          cat > /etc/nginx/sites-available/curtain.conf << 'NGXEOF'
+          server {
+              listen 80 default_server;
+              listen 443 ssl default_server;
+              server_name curtain.local curtain localhost _;
+              include /etc/nginx/snippets/curtain-ssl.conf;
+              client_max_body_size 2G;
+              root /opt/curtain/curtain;
+              index index.html;
+              gzip on;
+              gzip_types text/css application/javascript application/json image/svg+xml;
+              location / { try_files \$uri \$uri/ /index.html; }
+              location /api/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_read_timeout 300s;
+              }
+              location /admin/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+              location /ws/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_set_header Host \$host;
+                  proxy_read_timeout 86400s;
+              }
+              location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
+              location /media/ { alias /opt/curtain/media/; }
+          }
+          NGXEOF
+
+          cat > /etc/nginx/sites-available/curtainptm.conf << 'NGXEOF'
+          server {
+              listen 80;
+              listen 443 ssl;
+              server_name curtainptm.local curtainptm;
+              include /etc/nginx/snippets/curtain-ssl.conf;
+              client_max_body_size 2G;
+              root /opt/curtain/curtainptm;
+              index index.html;
+              gzip on;
+              gzip_types text/css application/javascript application/json image/svg+xml;
+              location / { try_files \$uri \$uri/ /index.html; }
+              location /api/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_read_timeout 300s;
+              }
+              location /admin/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+              location /ws/ {
+                  proxy_pass http://curtain_backend;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_set_header Host \$host;
+                  proxy_read_timeout 86400s;
+              }
+              location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
+              location /media/ { alias /opt/curtain/media/; }
+          }
+          NGXEOF
+
+          ln -sf /etc/nginx/sites-available/curtain.conf /etc/nginx/sites-enabled/
+          ln -sf /etc/nginx/sites-available/curtainptm.conf /etc/nginx/sites-enabled/
+          rm -f /etc/nginx/sites-enabled/default
+          nginx -t
+
+          cat > /usr/local/bin/curtain-ptm-mdns << 'PYEOF'
+          #!/usr/bin/env python3
+          import socket
+          import time
+          from zeroconf import Zeroconf, ServiceInfo
+
+          def get_local_ip():
+              s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+              try:
+                  s.connect(('10.255.255.255', 1))
+                  return s.getsockname()[0]
+              except Exception:
+                  return '127.0.0.1'
+              finally:
+                  s.close()
+
+          def main():
+              ip = get_local_ip()
+              zc = Zeroconf()
+              info = ServiceInfo(
+                  "_http._tcp.local.",
+                  "CurtainPTM._http._tcp.local.",
+                  addresses=[socket.inet_aton(ip)],
+                  port=80,
+                  server="curtainptm.local."
+              )
+              zc.register_service(info)
+              try:
+                  while True:
+                      time.sleep(1)
+              except KeyboardInterrupt:
+                  pass
+              finally:
+                  zc.unregister_service(info)
+                  zc.close()
+
+          if __name__ == '__main__':
+              main()
+          PYEOF
+          chmod +x /usr/local/bin/curtain-ptm-mdns
+
+          cat > /etc/avahi/services/curtain.service << 'AVHEOF'
+          <?xml version="1.0" standalone='no'?>
+          <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+          <service-group>
+            <name>Curtain Appliance</name>
+            <service>
+              <type>_http._tcp</type>
+              <port>80</port>
+              <txt-record>path=/</txt-record>
+            </service>
+          </service-group>
+          AVHEOF
+
+          cat > /opt/curtain/first-boot.sh << 'FBEOF'
+          #!/bin/bash
+          set -e
+          LOG=/var/log/curtain/first-boot.log
+          mkdir -p /var/log/curtain
+          exec > >(tee -a "\$LOG") 2>&1
+          echo "=== first-boot.sh started \$(date -u) ==="
+          ENV_FILE=/opt/curtain/.env
+          if grep -q "^SECRET_KEY=CHANGE-ON-FIRST-BOOT" "\$ENV_FILE"; then
+              NEW_KEY=\$(openssl rand -base64 48 | tr -d '\n')
+              sed -i "s|^SECRET_KEY=CHANGE-ON-FIRST-BOOT|SECRET_KEY=\${NEW_KEY}|" "\$ENV_FILE"
+              echo "SECRET_KEY generated"
+          fi
+          echo "=== first-boot.sh completed \$(date -u) ==="
+          FBEOF
+          chmod +x /opt/curtain/first-boot.sh
+
+          cat > /etc/systemd/system/curtain-firstboot.service << 'UNITEOF'
+          [Unit]
+          Description=Curtain First Boot Setup
+          After=network-online.target local-fs.target
+          Wants=network-online.target
+          Before=curtain-backend.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          User=root
+          ExecStart=/opt/curtain/first-boot.sh
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          systemctl --root=/ enable curtain-firstboot.service
+
+          cat > /etc/systemd/system/curtain-backend.service << 'UNITEOF'
+          [Unit]
+          Description=Curtain Django Backend
+          After=network.target postgresql.service redis-server.service curtain-firstboot.service
+          Requires=postgresql.service redis-server.service
+          Wants=curtain-firstboot.service
+
+          [Service]
+          Type=simple
+          User=curtain-svc
+          Group=curtain-svc
+          WorkingDirectory=/opt/curtain/backend
+          EnvironmentFile=/opt/curtain/.env
+          ExecStart=/opt/curtain/venv/bin/gunicorn curtainbe.asgi:application \\
+              --bind 127.0.0.1:8000 --workers 4 --timeout 300 \\
+              -k uvicorn.workers.UvicornWorker --log-level info
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          systemctl --root=/ enable curtain-backend.service
+
+          cat > /etc/systemd/system/curtain-rqworker.service << 'UNITEOF'
+          [Unit]
+          Description=Curtain RQ Worker
+          After=curtain-backend.service
+          Requires=curtain-backend.service
+
+          [Service]
+          Type=simple
+          User=curtain-svc
+          Group=curtain-svc
+          WorkingDirectory=/opt/curtain/backend
+          EnvironmentFile=/opt/curtain/.env
+          ExecStart=/opt/curtain/venv/bin/python manage.py rqworker default
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          systemctl --root=/ enable curtain-rqworker.service
+
+          cat > /etc/systemd/system/curtain-ptm-mdns.service << 'UNITEOF'
+          [Unit]
+          Description=Publish curtainptm.local mDNS record
+          After=network-online.target avahi-daemon.service
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/curtain-ptm-mdns
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNITEOF
+
+          systemctl --root=/ enable curtain-ptm-mdns.service
+
+          mkdir -p /etc/systemd/resolved.conf.d
+          cat > /etc/systemd/resolved.conf.d/mdns.conf << 'RESOLVEDEOF'
+          [Resolve]
+          MulticastDNS=yes
+          RESOLVEDEOF
+
+          echo "=== CURTAIN: SD card write optimizations ==="
+          sed -i '/ext4/s/defaults/defaults,noatime/' /etc/fstab
+          printf 'tmpfs\t/tmp\ttmpfs\tdefaults,noatime,nosuid,size=128m\t0 0\n' >> /etc/fstab
+
+          mkdir -p /etc/systemd/journald.conf.d
+          cat > /etc/systemd/journald.conf.d/curtain.conf << 'JEOF'
+          [Journal]
+          Storage=volatile
+          RuntimeMaxUse=64M
+          JEOF
+
+          cat >> /etc/redis/redis.conf << 'REOF'
+
+          save ""
+          appendonly no
+          REOF
+
+          PG_CONF=\$(find /etc/postgresql -name "postgresql.conf" 2>/dev/null | head -1)
+          if [ -n "\$PG_CONF" ]; then
+            cat >> "\$PG_CONF" << 'PGEOF'
+
+          synchronous_commit = off
+          checkpoint_completion_target = 0.9
+          max_wal_size = 256MB
+          wal_buffers = 16MB
+          PGEOF
+          fi
+
+          sed -i 's|access_log /var/log/nginx/access.log;|access_log off;|' /etc/nginx/nginx.conf
+
+          chown -R curtain-svc:curtain-svc /opt/curtain /var/log/curtain
+          chown root:curtain-svc /opt/curtain/.env
+          chmod 640 /opt/curtain/.env
+
+          echo "=== CURTAIN: stopping services ==="
+          service postgresql stop || \\
+            pg_ctlcluster "\$(pg_lsclusters -h | head -1 | awk '{print \$1, \$2}')" stop || true
+
+          echo "=== CURTAIN: done ==="
+          EOF
+
+          echo "IMG_SUFFIX=-curtain" > pi-gen/stage2a/EXPORT_IMAGE
+          rm -f pi-gen/stage2/EXPORT_IMAGE
+          chmod +x pi-gen/stage2a/prerun.sh \
+            pi-gen/stage2a/00-install-curtain/00-run.sh \
+            pi-gen/stage2a/00-install-curtain/01-run-chroot.sh
+
+          touch pi-gen/stage3/SKIP pi-gen/stage4/SKIP pi-gen/stage5/SKIP
+
+          cat > pi-gen/config << 'CFGEOF'
+          IMG_NAME=curtain-pi
+          RELEASE=trixie
+          DEPLOY_COMPRESSION=xz
+          COMPRESSION_LEVEL=9
+          LOCALE_DEFAULT=en_US.UTF-8
+          TARGET_HOSTNAME=curtain
+          KEYBOARD_KEYMAP=gb
+          KEYBOARD_LAYOUT="English (UK)"
+          TIMEZONE_DEFAULT=UTC
+          FIRST_USER_NAME=curtain
+          FIRST_USER_PASS=curtain123
+          ENABLE_SSH=1
+          STAGE_LIST="stage0 stage1 stage2 stage2a"
+          BOOTSTRAP_KEYRING=debian-archive-keyring
+          CFGEOF
+
+      - name: Build RPi image
+        timeout-minutes: 180
+        run: |
+          cd pi-gen
+          export DEBOOTSTRAP_QEMU_USER_STATIC=/usr/bin/qemu-aarch64-static
+          sudo -E USE_DOCKER=0 ./build.sh
+
+      - name: Post-build RPi image test
+        timeout-minutes: 45
+        run: |
+          ROOTFS=$(find pi-gen/work -name "rootfs" -path "*/stage2a/rootfs" | head -1)
+          echo "Testing with ROOTFS at: ${ROOTFS}"
+          fail() { echo "FAIL: $*"; exit 1; }
+
+          sudo mount --bind /proc   "${ROOTFS}/proc"
+          sudo mount --bind /sys    "${ROOTFS}/sys"
+          sudo mount --bind /dev    "${ROOTFS}/dev"
+          sudo mount --bind /dev/pts "${ROOTFS}/dev/pts"
+          sudo mount -t tmpfs tmpfs "${ROOTFS}/run"
+
+          cleanup() {
+            sudo chroot "${ROOTFS}" nginx -s stop 2>/dev/null || true
+            sudo chroot "${ROOTFS}" bash -c '
+              kill $(cat /tmp/gunicorn.pid 2>/dev/null) 2>/dev/null || true
+              service redis-server stop 2>/dev/null || true
+              service postgresql stop  2>/dev/null || true
+            ' 2>/dev/null || true
+            sudo umount "${ROOTFS}/run" \
+              "${ROOTFS}/dev/pts" "${ROOTFS}/dev" \
+              "${ROOTFS}/sys"     "${ROOTFS}/proc" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          echo "=== Starting PostgreSQL ==="
+          sudo chroot "${ROOTFS}" service postgresql start \
+            || fail "PostgreSQL failed to start"
+
+          echo "=== Starting Redis ==="
+          sudo chroot "${ROOTFS}" service redis-server start \
+            || fail "Redis failed to start"
+
+          echo "=== Starting Django backend (ARM64 via QEMU) ==="
+          sudo chroot "${ROOTFS}" bash -c '
+            cd /opt/curtain/backend
+            set -a; source /opt/curtain/.env; set +a
+            /opt/curtain/venv/bin/gunicorn curtainbe.asgi:application \
+              --bind 127.0.0.1:8000 \
+              --workers 1 \
+              --timeout 300 \
+              -k uvicorn.workers.UvicornWorker \
+              --daemon \
+              --pid /tmp/gunicorn.pid
+          '
+
+          echo "=== Starting nginx ==="
+          sudo chroot "${ROOTFS}" nginx -t || fail "nginx config error"
+          sudo chroot "${ROOTFS}" nginx    || fail "nginx failed to start"
+
+          echo "=== Waiting for backend (ARM64/QEMU, up to 10 min) ==="
+          for i in $(seq 1 120); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://127.0.0.1:8000/api/ 2>/dev/null) || true
+            if echo "$code" | grep -qE "^[234]"; then
+              echo "Backend ready after $((i * 5))s"
+              break
+            fi
+            [ "$i" -eq 120 ] && fail "Backend never became ready in 10 min"
+            sleep 5
+          done
+
+          CURTAIN=$(curl -sfk --resolve "curtain.local:443:127.0.0.1" https://curtain.local/) \
+            || fail "curtain.local vhost did not return 200"
+          CURTAINPTM=$(curl -sfk --resolve "curtainptm.local:443:127.0.0.1" https://curtainptm.local/) \
+            || fail "curtainptm.local vhost did not return 200"
+          echo "$CURTAIN" | grep -q "<title>Curtain 2.0</title>" \
+            || fail "curtain.local wrong title"
+          echo "$CURTAINPTM" | grep -q "<title>CurtainPTM</title>" \
+            || fail "curtainptm.local wrong title"
+          echo "PASS: nginx vhost routing correct for both frontends"
+
+      - name: Upload RPi image
+        uses: actions/upload-artifact@v4
+        with:
+          name: curtain-pi-arm64
+          path: pi-gen/deploy/*.img.xz
+          retention-days: 30
+          compression-level: 0
+
+  summary:
+    name: Summary
+    needs: [build-frontend, build-vm, build-rpi]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summary
+        run: |
+          echo "## Curtain Appliance Images" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontends | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| VM (amd64) | ${{ needs.build-vm.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| RPi (arm64) | ${{ needs.build-rpi.result }} |" >> $GITHUB_STEP_SUMMARY
