@@ -38,7 +38,7 @@ jobs:
         run: |
           git clone --depth 1 --branch "$CURTAIN_REF" https://github.com/noatgnu/curtain.git /tmp/curtain
           cd /tmp/curtain
-          npm install --ignore-platform
+          npm ci
           npx ng build CurtainTwo --configuration=production --base-href /
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtain"
           cp -r dist/CurtainTwo/browser/* "$GITHUB_WORKSPACE/frontend/curtain/"
@@ -49,7 +49,7 @@ jobs:
         run: |
           git clone --depth 1 --branch "$CURTAINPTM_REF" https://github.com/noatgnu/curtainPTM.git /tmp/curtainptm
           cd /tmp/curtainptm
-          npm install --ignore-platform
+          npm ci
           npx ng build curtainPTM2 --configuration=production --base-href /
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtainptm"
           cp -r dist/curtainPTM2/browser/* "$GITHUB_WORKSPACE/frontend/curtainptm/"
