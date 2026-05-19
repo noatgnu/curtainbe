@@ -113,6 +113,8 @@ ssl_ciphers         HIGH:!aNULL:!MD5;
 SSLEOF
 
 cat > /etc/nginx/conf.d/curtain-upstream.conf << 'UPEOF'
+server_names_hash_bucket_size 64;
+
 upstream curtain_backend {
     server 127.0.0.1:8000;
 }
