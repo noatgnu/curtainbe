@@ -11,7 +11,7 @@ echo "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] https://apt.pos
 apt-get update
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
     postgresql-16 postgresql-client-16 redis-server nginx \
-    python3 python3-venv python3-dev python3.12 python3.12-venv python3.12-dev libpq-dev \
+    python3 python3-venv python3-dev libpq-dev \
     avahi-daemon avahi-utils git python3-zeroconf
 
 systemctl --root=/ enable postgresql redis-server nginx avahi-daemon
@@ -40,9 +40,10 @@ service postgresql restart || \
     pg_ctlcluster "$(pg_lsclusters -h | head -1 | awk '{print $1, $2}')" restart
 
 echo "=== CURTAIN: Python venv ==="
-python3.12 -m venv /opt/curtain/venv
+python3 -m venv /opt/curtain/venv
 /opt/curtain/venv/bin/pip install --upgrade pip
-/opt/curtain/venv/bin/pip install -r /opt/curtain/backend/requirements.txt
+sed 's/ ;.*$//' /opt/curtain/backend/requirements.txt > /tmp/requirements-stripped.txt
+/opt/curtain/venv/bin/pip install -r /tmp/requirements-stripped.txt
 /opt/curtain/venv/bin/pip install gunicorn "uvicorn[standard]" psycopg2-binary
 
 cat > /opt/curtain/.env << 'DOTENV'
