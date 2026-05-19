@@ -40,11 +40,12 @@ service postgresql restart || \
     pg_ctlcluster "$(pg_lsclusters -h | head -1 | awk '{print $1, $2}')" restart
 
 echo "=== CURTAIN: Python venv ==="
-python3 -m venv /opt/curtain/venv
+apt-get install -y python3.12
+python3.12 -m venv /opt/curtain/venv
 /opt/curtain/venv/bin/pip install --upgrade pip
-sed 's/ ;.*$//' /opt/curtain/backend/requirements.txt > /tmp/requirements-stripped.txt
-/opt/curtain/venv/bin/pip install -r /tmp/requirements-stripped.txt
-/opt/curtain/venv/bin/pip install gunicorn "uvicorn[standard]" psycopg2-binary
+/opt/curtain/venv/bin/pip install poetry
+cd /opt/curtain/backend
+VIRTUAL_ENV=/opt/curtain/venv /opt/curtain/venv/bin/poetry install --no-root --only main
 
 cat > /opt/curtain/.env << 'DOTENV'
 WORKING_ENV=PRODUCTION
