@@ -39,9 +39,27 @@ sed -i 's/host[[:space:]]\+all[[:space:]]\+all[[:space:]]\+127\.0\.0\.1\/32[[:sp
 service postgresql restart || \
     pg_ctlcluster "$(pg_lsclusters -h | head -1 | awk '{print $1, $2}')" restart
 
+echo "=== CURTAIN: installing Python 3.12 (python-build-standalone) ==="
+PYTHON312_URL=$(curl -fsSL \
+    "https://api.github.com/repos/indygreg/python-build-standalone/releases?per_page=5" \
+    | python3 -c "
+import json, sys
+for r in json.load(sys.stdin):
+    for a in r.get('assets', []):
+        n = a['name']
+        if 'cpython-3.12' in n and 'aarch64-unknown-linux-gnu-install_only' in n and n.endswith('.tar.gz'):
+            print(a['browser_download_url'])
+            raise SystemExit(0)
+")
+if [ -z "$PYTHON312_URL" ]; then
+    echo "ERROR: could not find Python 3.12 aarch64 download URL" >&2
+    exit 1
+fi
+echo "Downloading: $PYTHON312_URL"
+curl -fsSL "$PYTHON312_URL" | tar -xz -C /opt/
+
 echo "=== CURTAIN: Python venv ==="
-apt-get install -y python3.12
-python3.12 -m venv /opt/curtain/venv
+/opt/python/bin/python3.12 -m venv /opt/curtain/venv
 /opt/curtain/venv/bin/pip install --upgrade pip
 /opt/curtain/venv/bin/pip install poetry
 cd /opt/curtain/backend
