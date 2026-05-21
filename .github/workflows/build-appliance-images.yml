@@ -40,14 +40,14 @@ jobs:
           cd /tmp/curtain
           npm install
           npx ng build CurtainTwo --configuration=appliance --base-href /
-          python3 -c '
-import json
-with open("dist/browser/ngsw.json") as f:
-    ngsw = json.load(f)
-ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
-with open("dist/browser/ngsw.json", "w") as f:
-    json.dump(ngsw, f)
-'
+          python3 << 'PYEOF'
+          import json
+          with open("dist/browser/ngsw.json") as f:
+              ngsw = json.load(f)
+          ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
+          with open("dist/browser/ngsw.json", "w") as f:
+              json.dump(ngsw, f)
+          PYEOF
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtain"
           cp -r dist/browser/* "$GITHUB_WORKSPACE/frontend/curtain/"
 
@@ -59,14 +59,14 @@ with open("dist/browser/ngsw.json", "w") as f:
           cd /tmp/curtainptm
           npm install
           npx ng build curtainPTM2 --configuration=appliance --base-href /
-          python3 -c '
-import json
-with open("dist/browser/ngsw.json") as f:
-    ngsw = json.load(f)
-ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
-with open("dist/browser/ngsw.json", "w") as f:
-    json.dump(ngsw, f)
-'
+          python3 << 'PYEOF'
+          import json
+          with open("dist/browser/ngsw.json") as f:
+              ngsw = json.load(f)
+          ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
+          with open("dist/browser/ngsw.json", "w") as f:
+              json.dump(ngsw, f)
+          PYEOF
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtainptm"
           cp -r dist/browser/* "$GITHUB_WORKSPACE/frontend/curtainptm/"
 
