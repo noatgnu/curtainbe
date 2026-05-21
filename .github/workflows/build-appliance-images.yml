@@ -40,6 +40,14 @@ jobs:
           cd /tmp/curtain
           npm install
           npx ng build CurtainTwo --configuration=appliance --base-href /
+          python3 -c '
+import json
+with open("dist/browser/ngsw.json") as f:
+    ngsw = json.load(f)
+ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
+with open("dist/browser/ngsw.json", "w") as f:
+    json.dump(ngsw, f)
+'
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtain"
           cp -r dist/browser/* "$GITHUB_WORKSPACE/frontend/curtain/"
 
@@ -51,6 +59,14 @@ jobs:
           cd /tmp/curtainptm
           npm install
           npx ng build curtainPTM2 --configuration=appliance --base-href /
+          python3 -c '
+import json
+with open("dist/browser/ngsw.json") as f:
+    ngsw = json.load(f)
+ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
+with open("dist/browser/ngsw.json", "w") as f:
+    json.dump(ngsw, f)
+'
           mkdir -p "$GITHUB_WORKSPACE/frontend/curtainptm"
           cp -r dist/browser/* "$GITHUB_WORKSPACE/frontend/curtainptm/"
 
@@ -291,6 +307,20 @@ jobs:
 
           echo "PASS: curtain.local and curtainptm.local serve correct frontends, API responds"
 
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
+
+      - name: Browser smoke tests (VM)
+        timeout-minutes: 10
+        run: |
+          C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
+          [ -n "$C_IP" ] && echo "$C_IP curtain.local" | sudo tee -a /etc/hosts || true
+          node .github/appliance/browser-test.js \
+            https://localhost:8443 \
+            https://curtainptm.local
+
       - name: Remove CI SSH key
         run: |
           ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
@@ -358,6 +388,11 @@ jobs:
             coreutils quilt debootstrap zerofree zip dosfstools \
             libarchive-tools rsync xz-utils file git curl bc gpg pigz \
             qemu-user-static binfmt-support arch-test debian-archive-keyring
+
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
 
       - name: Enable ARM64 emulation
         run: |
@@ -457,7 +492,7 @@ jobs:
           sudo -E USE_DOCKER=0 ./build.sh
 
       - name: Post-build RPi image test
-        timeout-minutes: 45
+        timeout-minutes: 60
         run: |
           ROOTFS=$(find pi-gen/work -name "rootfs" -path "*/stage2a/rootfs" | head -1)
           echo "Testing with ROOTFS at: ${ROOTFS}"
@@ -528,6 +563,12 @@ jobs:
           echo "$CURTAINPTM" | grep -q "<title>CurtainPTM</title>" \
             || fail "curtainptm.local wrong title"
           echo "PASS: nginx vhost routing correct for both frontends"
+
+          echo "=== Browser smoke tests (RPi) ==="
+          echo "127.0.0.1 curtain.local curtainptm.local" | sudo tee -a /etc/hosts
+          node "${GITHUB_WORKSPACE}/.github/appliance/browser-test.js" \
+            https://curtain.local \
+            https://curtainptm.local
 
       - name: Upload RPi image
         uses: actions/upload-artifact@v4

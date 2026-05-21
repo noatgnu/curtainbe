@@ -145,7 +145,7 @@ server {
         proxy_read_timeout 300s;
     }
 
-    location /admin/ {
+    location /admin {
         proxy_pass http://curtain_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -167,15 +167,7 @@ server {
     }
 
     location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
-
-    location /media/ {
-        root /opt/curtain/curtain;
-        try_files $uri @django_media;
-    }
-
-    location @django_media {
-        root /opt/curtain/backend;
-    }
+    location /media/  { alias /opt/curtain/curtain/media/; }
 }
 NGXEOF
 
@@ -204,7 +196,7 @@ server {
         proxy_read_timeout 300s;
     }
 
-    location /admin/ {
+    location /admin {
         proxy_pass http://curtain_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -226,15 +218,7 @@ server {
     }
 
     location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
-
-    location /media/ {
-        root /opt/curtain/curtainptm;
-        try_files $uri @django_media;
-    }
-
-    location @django_media {
-        root /opt/curtain/backend;
-    }
+    location /media/  { alias /opt/curtain/curtainptm/media/; }
 }
 NGXEOF
 
