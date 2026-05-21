@@ -167,7 +167,15 @@ server {
     }
 
     location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
-    location /media/  { alias /opt/curtain/backend/media/; }
+
+    location /media/ {
+        root /opt/curtain/curtain;
+        try_files $uri @django_media;
+    }
+
+    location @django_media {
+        root /opt/curtain/backend;
+    }
 }
 NGXEOF
 
@@ -218,7 +226,15 @@ server {
     }
 
     location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
-    location /media/  { alias /opt/curtain/backend/media/; }
+
+    location /media/ {
+        root /opt/curtain/curtainptm;
+        try_files $uri @django_media;
+    }
+
+    location @django_media {
+        root /opt/curtain/backend;
+    }
 }
 NGXEOF
 
