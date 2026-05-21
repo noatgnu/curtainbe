@@ -85,7 +85,9 @@ async function testVhost(context, baseUrl, expectedTitle) {
   if (apiResp.status() < 500) {
     pass(`/api/curtain/ → HTTP ${apiResp.status()}`);
   } else {
-    fail(`/api/curtain/ → HTTP ${apiResp.status()} (server error)`);
+    let body = '';
+    try { body = await apiResp.text(); } catch (_) {}
+    fail(`/api/curtain/ → HTTP ${apiResp.status()} (server error)\n    body: ${body.slice(0, 500)}`);
   }
 
   // --- Static assets reachable ---

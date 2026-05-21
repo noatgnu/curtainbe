@@ -315,6 +315,9 @@ jobs:
       - name: Browser smoke tests (VM)
         timeout-minutes: 10
         run: |
+          echo "=== API pre-check (curl) ==="
+          curl -sfk -D - https://localhost:8443/api/curtain/ 2>&1 | head -80 || true
+
           C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
           [ -n "$C_IP" ] && echo "$C_IP curtain.local" | sudo tee -a /etc/hosts || true
           node .github/appliance/browser-test.js \
@@ -504,7 +507,14 @@ jobs:
           sudo mount --bind /dev/pts "${ROOTFS}/dev/pts"
           sudo mount -t tmpfs tmpfs  "${ROOTFS}/run"
 
+          dump_logs() {
+            echo "=== gunicorn error log ==="
+            sudo cat "${ROOTFS}/tmp/gunicorn-error.log" 2>/dev/null | tail -100 || true
+            echo "=== nginx error log ==="
+            sudo cat "${ROOTFS}/var/log/nginx/error.log" 2>/dev/null | tail -50 || true
+          }
           cleanup() {
+            dump_logs
             sudo chroot "${ROOTFS}" nginx -s stop 2>/dev/null || true
             sudo chroot "${ROOTFS}" bash -c '
               kill $(cat /tmp/gunicorn.pid 2>/dev/null) 2>/dev/null || true
@@ -535,7 +545,9 @@ jobs:
               --timeout 300 \
               -k uvicorn.workers.UvicornWorker \
               --daemon \
-              --pid /tmp/gunicorn.pid
+              --pid /tmp/gunicorn.pid \
+              --error-logfile /tmp/gunicorn-error.log \
+              --log-level debug
           '
 
           echo "=== Starting nginx ==="
@@ -563,6 +575,10 @@ jobs:
           echo "$CURTAINPTM" | grep -q "<title>CurtainPTM</title>" \
             || fail "curtainptm.local wrong title"
           echo "PASS: nginx vhost routing correct for both frontends"
+
+          echo "=== API pre-check (curl) ==="
+          curl -sfk --resolve "curtain.local:443:127.0.0.1" \
+            -D - https://curtain.local/api/curtain/ 2>&1 | head -80 || true
 
           echo "=== Browser smoke tests (RPi) ==="
           echo "127.0.0.1 curtain.local curtainptm.local" | sudo tee -a /etc/hosts
