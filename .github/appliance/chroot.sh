@@ -129,8 +129,10 @@ server {
     client_max_body_size 2G;
     root /opt/curtain/curtain;
     index index.html;
+    charset utf-8;
     gzip on;
-    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_vary on;
+    gzip_types text/css application/javascript text/javascript application/json image/svg+xml;
 
     location / { try_files $uri $uri/ /index.html; }
 
@@ -149,6 +151,10 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Accept-Encoding "";
+        sub_filter 'href="static/' 'href="/static/';
+        sub_filter 'src="static/'  'src="/static/';
+        sub_filter_once off;
     }
 
     location /ws/ {
@@ -174,8 +180,10 @@ server {
     client_max_body_size 2G;
     root /opt/curtain/curtainptm;
     index index.html;
+    charset utf-8;
     gzip on;
-    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_vary on;
+    gzip_types text/css application/javascript text/javascript application/json image/svg+xml;
 
     location / { try_files $uri $uri/ /index.html; }
 
@@ -194,6 +202,10 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Accept-Encoding "";
+        sub_filter 'href="static/' 'href="/static/';
+        sub_filter 'src="static/'  'src="/static/';
+        sub_filter_once off;
     }
 
     location /ws/ {
@@ -396,6 +408,7 @@ sed -i 's|access_log /var/log/nginx/access.log;|access_log off;|' /etc/nginx/ngi
 chown -R curtain-svc:curtain-svc /opt/curtain /var/log/curtain
 chown root:curtain-svc /opt/curtain/.env
 chmod 640 /opt/curtain/.env
+chmod -R a+rX /opt/curtain/curtain /opt/curtain/curtainptm
 
 echo "=== CURTAIN: stopping services ==="
 service postgresql stop || \

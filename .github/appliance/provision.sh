@@ -79,6 +79,7 @@ systemctl enable curtain-firstboot curtain-backend curtain-rqworker curtain-ptm-
 chown -R curtain-svc:curtain-svc /opt/curtain /var/log/curtain
 chown root:curtain-svc /opt/curtain/.env
 chmod 640 /opt/curtain/.env
+chmod -R a+rX /opt/curtain/curtain /opt/curtain/curtainptm
 
 service postgresql restart
 systemctl restart nginx
