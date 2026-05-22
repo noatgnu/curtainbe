@@ -327,7 +327,7 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "=== API pre-check (curl) ==="
-          curl -sfk -D - https://localhost:8443/api/curtain/ 2>&1 | head -80 || true
+          curl -sfk -D - https://localhost:8443/curtain/ 2>&1 | head -80 || true
 
           C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
           [ -n "$C_IP" ] && echo "$C_IP curtain.local" | sudo tee -a /etc/hosts || true
@@ -635,7 +635,7 @@ jobs:
 
           echo "=== API pre-check (curl) ==="
           curl -sfk --resolve "curtain.local:443:127.0.0.1" \
-            -D - https://curtain.local/api/curtain/ 2>&1 | head -80 || true
+            -D - https://curtain.local/curtain/ 2>&1 | head -80 || true
 
           echo "=== Browser smoke tests (RPi) ==="
           echo "127.0.0.1 curtain.local curtainptm.local" | sudo tee -a /etc/hosts

@@ -81,13 +81,13 @@ async function testVhost(context, baseUrl, expectedTitle) {
   await adminPage.close();
 
   // --- API is reachable ---
-  const apiResp = await context.request.get(baseUrl + '/api/curtain/');
+  const apiResp = await context.request.get(baseUrl + '/curtain/');
   if (apiResp.status() < 500) {
-    pass(`/api/curtain/ → HTTP ${apiResp.status()}`);
+    pass(`/curtain/ → HTTP ${apiResp.status()}`);
   } else {
     let body = '';
     try { body = await apiResp.text(); } catch (_) {}
-    fail(`/api/curtain/ → HTTP ${apiResp.status()} (server error)\n    body: ${body.slice(0, 2000)}`);
+    fail(`/curtain/ → HTTP ${apiResp.status()} (server error)\n    body: ${body.slice(0, 2000)}`);
   }
 
   // --- Static assets reachable ---
