@@ -532,8 +532,16 @@ jobs:
             || fail "PostgreSQL failed to start"
 
           echo "=== Starting Redis ==="
-          sudo chroot "${ROOTFS}" service redis-server start \
+          sudo chroot "${ROOTFS}" redis-server \
+            --bind 127.0.0.1 --port 6379 \
+            --daemonize yes --loglevel warning \
+            --save "" --appendonly no \
             || fail "Redis failed to start"
+          for i in $(seq 1 10); do
+            nc -z 127.0.0.1 6379 2>/dev/null && echo "Redis TCP ready" && break
+            [ "$i" -eq 10 ] && fail "Redis not listening on 6379 after 10s"
+            sleep 1
+          done
 
           echo "=== Starting Django backend (ARM64 via QEMU) ==="
           sudo chroot "${ROOTFS}" bash -c '

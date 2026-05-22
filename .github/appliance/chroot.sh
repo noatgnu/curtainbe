@@ -395,7 +395,7 @@ mkdir -p /etc/systemd/journald.conf.d
 printf '[Journal]\nStorage=volatile\nRuntimeMaxUse=64M\n' \
     > /etc/systemd/journald.conf.d/curtain.conf
 
-printf '\nsave ""\nappendonly no\n' >> /etc/redis/redis.conf
+printf '\nsave ""\nappendonly no\nbind 127.0.0.1\nport 6379\n' >> /etc/redis/redis.conf
 
 PG_CONF=$(find /etc/postgresql -name "postgresql.conf" 2>/dev/null | head -1)
 if [ -n "$PG_CONF" ]; then
