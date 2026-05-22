@@ -536,6 +536,7 @@ jobs:
             --bind 127.0.0.1 --port 6379 \
             --daemonize yes --loglevel warning \
             --save "" --appendonly no \
+            --ignore-warnings ARM64-COW-BUG \
             || fail "Redis failed to start"
           for i in $(seq 1 10); do
             nc -z 127.0.0.1 6379 2>/dev/null && echo "Redis TCP ready" && break
