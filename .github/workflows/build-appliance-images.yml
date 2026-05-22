@@ -20,6 +20,10 @@ on:
         description: 'CurtainPTM frontend branch/tag'
         type: string
         default: 'master'
+      lite:
+        description: 'Lite build for low-RAM boards (RPi Zero 2 W, 3 A+) — 1 worker, reduced PostgreSQL memory, 512 MB swap'
+        type: boolean
+        default: false
 
 jobs:
   build-frontend:
@@ -92,6 +96,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/lib/python*
+          sudo apt-get clean
+          df -h
+
       - name: Download curtain frontend
         uses: actions/download-artifact@v4
         with:
@@ -136,7 +147,7 @@ jobs:
       - name: Download Ubuntu cloud image
         run: |
           wget -q "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img" -O vm-disk.qcow2
-          qemu-img resize vm-disk.qcow2 20G
+          qemu-img resize vm-disk.qcow2 15G
 
       - name: Create cloud-init seed
         run: |
@@ -324,6 +335,17 @@ jobs:
             https://localhost:8443 \
             https://curtainptm.local
 
+      - name: Prepare bare-metal image
+        run: |
+          ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost << 'BAREMETAL'
+          sudo touch /etc/cloud/cloud-init.disabled
+          sudo rm -rf /var/lib/cloud/instances/*
+          printf 'network:\n  version: 2\n  ethernets:\n    all-en:\n      match:\n        name: "en*"\n      dhcp4: true\n    all-eth:\n      match:\n        name: "eth*"\n      dhcp4: true\n' \
+            | sudo tee /etc/netplan/10-curtain-bare-metal.yaml > /dev/null
+          sudo fstrim -v / 2>/dev/null || \
+            sudo sh -c 'dd if=/dev/zero of=/tmp/zero.fill bs=1M 2>/dev/null; rm -f /tmp/zero.fill; sync'
+          BAREMETAL
+
       - name: Remove CI SSH key
         run: |
           ssh -o StrictHostKeyChecking=no -i curtkey -p 2222 curtain@localhost \
@@ -344,16 +366,28 @@ jobs:
           sleep 2
 
       - name: Compact and compress
+        timeout-minutes: 30
         run: |
           qemu-img convert -O qcow2 -c vm-disk.qcow2 curtain-vm-amd64.qcow2
-          xz -3 curtain-vm-amd64.qcow2
-          ls -lh curtain-vm-amd64.qcow2.xz
+          rm -f vm-disk.qcow2
+          qemu-img convert -O raw curtain-vm-amd64.qcow2 /dev/stdout \
+            | xz -T0 -3 > curtain-x86-amd64.img.xz
+          xz -T0 -3 curtain-vm-amd64.qcow2
+          ls -lh curtain-vm-amd64.qcow2.xz curtain-x86-amd64.img.xz
 
       - name: Upload VM image
         uses: actions/upload-artifact@v4
         with:
           name: curtain-vm-amd64
           path: curtain-vm-amd64.qcow2.xz
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload x86 flashable image
+        uses: actions/upload-artifact@v4
+        with:
+          name: curtain-x86-amd64
+          path: curtain-x86-amd64.img.xz
           retention-days: 7
           compression-level: 0
 
@@ -420,6 +454,7 @@ jobs:
       - name: Create curtain stage
         env:
           BACKEND_REF: ${{ inputs.backend_ref || 'master' }}
+          LITE: ${{ inputs.lite || 'false' }}
         run: |
           mkdir -p pi-gen/stage2a/00-install-curtain
 
@@ -461,17 +496,28 @@ jobs:
           cp .github/appliance/chroot.sh \
             pi-gen/stage2a/00-install-curtain/01-run-chroot.sh
 
-          echo "IMG_SUFFIX=-curtain" > pi-gen/stage2a/EXPORT_IMAGE
+          if [ "${LITE}" = "true" ]; then
+            cp .github/appliance/chroot-lite-overrides.sh \
+              pi-gen/stage2a/00-install-curtain/02-run-chroot.sh
+            IMG_SUFFIX=-curtain-lite
+            IMG_NAME=curtain-pi-lite
+          else
+            IMG_SUFFIX=-curtain
+            IMG_NAME=curtain-pi
+          fi
+
+          echo "IMG_SUFFIX=${IMG_SUFFIX}" > pi-gen/stage2a/EXPORT_IMAGE
           rm -f pi-gen/stage2/EXPORT_IMAGE
           chmod +x \
             pi-gen/stage2a/prerun.sh \
             pi-gen/stage2a/00-install-curtain/00-run.sh \
-            pi-gen/stage2a/00-install-curtain/01-run-chroot.sh
+            pi-gen/stage2a/00-install-curtain/01-run-chroot.sh \
+            ${LITE:+pi-gen/stage2a/00-install-curtain/02-run-chroot.sh}
 
           touch pi-gen/stage3/SKIP pi-gen/stage4/SKIP pi-gen/stage5/SKIP
 
-          cat > pi-gen/config << 'CFGEOF'
-          IMG_NAME=curtain-pi
+          cat > pi-gen/config << CFGEOF
+          IMG_NAME=${IMG_NAME}
           RELEASE=trixie
           DEPLOY_COMPRESSION=xz
           COMPRESSION_LEVEL=9
@@ -600,7 +646,7 @@ jobs:
       - name: Upload RPi image
         uses: actions/upload-artifact@v4
         with:
-          name: curtain-pi-arm64
+          name: curtain-pi${{ inputs.lite && '-lite' || '' }}-arm64
           path: pi-gen/deploy/*.img.xz
           retention-days: 30
           compression-level: 0
