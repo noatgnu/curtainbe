@@ -33,9 +33,10 @@ if [ -n "$PG_CONF" ]; then
 fi
 
 if [ ! -f /swapfile ]; then
-    dd if=/dev/zero of=/swapfile bs=1M count=512 status=none
-    chmod 600 /swapfile
-    mkswap /swapfile
+    dd if=/dev/zero of=/swapfile.tmp bs=1M count=512 status=none
+    chmod 600 /swapfile.tmp
+    mkswap /swapfile.tmp
+    mv /swapfile.tmp /swapfile
     echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
