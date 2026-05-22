@@ -87,7 +87,7 @@ async function testVhost(context, baseUrl, expectedTitle) {
   } else {
     let body = '';
     try { body = await apiResp.text(); } catch (_) {}
-    fail(`/api/curtain/ → HTTP ${apiResp.status()} (server error)\n    body: ${body.slice(0, 500)}`);
+    fail(`/api/curtain/ → HTTP ${apiResp.status()} (server error)\n    body: ${body.slice(0, 2000)}`);
   }
 
   // --- Static assets reachable ---
