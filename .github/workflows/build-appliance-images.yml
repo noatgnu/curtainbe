@@ -366,13 +366,13 @@ jobs:
           sleep 2
 
       - name: Compact and compress
-        timeout-minutes: 30
+        timeout-minutes: 45
         run: |
           qemu-img convert -O qcow2 -c vm-disk.qcow2 curtain-vm-amd64.qcow2
           rm -f vm-disk.qcow2
-          qemu-img convert -O raw curtain-vm-amd64.qcow2 /dev/stdout \
-            | xz -T0 -3 > curtain-x86-amd64.img.xz
+          qemu-img convert -O raw curtain-vm-amd64.qcow2 curtain-x86-amd64.img
           xz -T0 -3 curtain-vm-amd64.qcow2
+          xz -T0 -3 curtain-x86-amd64.img
           ls -lh curtain-vm-amd64.qcow2.xz curtain-x86-amd64.img.xz
 
       - name: Upload VM image
