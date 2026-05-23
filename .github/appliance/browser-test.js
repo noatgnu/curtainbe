@@ -75,7 +75,12 @@ async function testVhost(context, baseUrl, expectedTitle) {
   }
 
   // --- Admin link in footer points to the correct path ---
-  const adminHref = await page.locator('a:has-text("Administration Portal")').getAttribute('href');
+  const adminHref = await page.evaluate(() => {
+    const link = Array.from(document.querySelectorAll('a')).find(
+      a => a.textContent.trim() === 'Administration Portal'
+    );
+    return link ? link.getAttribute('href') : null;
+  });
   if (adminHref === null) {
     fail('Administration Portal link not found in page');
   } else if (adminHref === '/admin/' || adminHref === '/admin') {
