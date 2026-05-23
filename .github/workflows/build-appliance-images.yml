@@ -20,6 +20,20 @@ on:
         description: 'CurtainPTM frontend branch/tag'
         type: string
         default: 'master'
+  workflow_call:
+    inputs:
+      image_type:
+        type: string
+        default: 'both'
+      backend_ref:
+        type: string
+        default: 'master'
+      curtain_ref:
+        type: string
+        default: 'master'
+      curtainptm_ref:
+        type: string
+        default: 'master'
 
 jobs:
   build-frontend:
