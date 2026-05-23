@@ -26,6 +26,17 @@ function fail(msg) {
   failed.push(msg);
 }
 
+async function waitForServiceWorker(page) {
+  await page.evaluate(() =>
+    navigator.serviceWorker
+      ? navigator.serviceWorker.ready.then(() => new Promise(resolve => {
+          if (navigator.serviceWorker.controller) return resolve();
+          navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+        }))
+      : Promise.resolve()
+  );
+}
+
 async function testVhost(context, baseUrl, expectedTitle) {
   console.log(`\nTesting ${baseUrl}`);
 
@@ -63,21 +74,46 @@ async function testVhost(context, baseUrl, expectedTitle) {
     fail('bootstrap-icons font not resolved (check /media/ serving)');
   }
 
+  // --- Admin link in footer points to the correct path ---
+  const adminHref = await page.locator('a:has-text("Administration Portal")').getAttribute('href');
+  if (adminHref === null) {
+    fail('Administration Portal link not found in page');
+  } else if (adminHref === '/admin/' || adminHref === '/admin') {
+    pass(`admin link href "${adminHref}"`);
+  } else {
+    fail(`admin link href "${adminHref}" — expected /admin/`);
+  }
+
+  // --- Wait for service worker to activate and claim this page ---
+  await waitForServiceWorker(page);
+  // Reload so the SW-controlled page is the baseline before opening admin
+  await page.reload({ waitUntil: 'networkidle', timeout: 20000 });
+
   await page.close();
 
-  // --- Admin is Django, not Angular ---
+  // --- Admin navigates to Django, not Angular SPA (SW is now active) ---
   const adminPage = await context.newPage();
   await adminPage.goto(baseUrl + '/admin/', {
     waitUntil: 'domcontentloaded',
-    timeout: 15000,
+    timeout: 20000,
   });
   const adminTitle = await adminPage.title();
   const adminUrl = adminPage.url();
+
   if (adminTitle === expectedTitle) {
-    fail(`/admin/ returned Angular SPA (title: "${adminTitle}") — service worker or nginx routing broken`);
+    fail(`/admin/ returned Angular SPA (title: "${adminTitle}") — service worker intercepting /admin/`);
   } else {
-    pass(`/admin/ → Django admin (title: "${adminTitle}", final url: ${adminUrl})`);
+    pass(`/admin/ → Django admin (title: "${adminTitle}", url: ${adminUrl})`);
   }
+
+  // Confirm Django login form is actually present, not a blank SPA shell
+  const hasDjangoForm = await adminPage.locator('#login-form, #id_username, .login').count() > 0;
+  if (hasDjangoForm) {
+    pass('/admin/ contains Django login form');
+  } else {
+    fail('/admin/ missing Django login form — page may be SPA shell or error page');
+  }
+
   await adminPage.close();
 
   // --- API is reachable ---
