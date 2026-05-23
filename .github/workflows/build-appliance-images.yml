@@ -20,10 +20,6 @@ on:
         description: 'CurtainPTM frontend branch/tag'
         type: string
         default: 'master'
-      lite:
-        description: 'Lite build for low-RAM boards (RPi Zero 2 W, 3 A+) — 1 worker, reduced PostgreSQL memory, 512 MB swap'
-        type: boolean
-        default: false
 
 jobs:
   build-frontend:
@@ -392,10 +388,13 @@ jobs:
           compression-level: 0
 
   build-rpi:
-    name: RPi Image (arm64)
+    name: RPi Image (${{ matrix.lite && 'lite' || 'normal' }}, arm64)
     if: inputs.image_type != 'vm'
     needs: build-frontend
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        lite: [false, true]
     steps:
       - uses: actions/checkout@v4
 
@@ -454,7 +453,7 @@ jobs:
       - name: Create curtain stage
         env:
           BACKEND_REF: ${{ inputs.backend_ref || 'master' }}
-          LITE: ${{ inputs.lite || 'false' }}
+          LITE: ${{ matrix.lite }}
         run: |
           mkdir -p pi-gen/stage2a/00-install-curtain
 
@@ -646,7 +645,7 @@ jobs:
       - name: Upload RPi image
         uses: actions/upload-artifact@v4
         with:
-          name: curtain-pi${{ inputs.lite && '-lite' || '' }}-arm64
+          name: curtain-pi${{ matrix.lite && '-lite' || '' }}-arm64
           path: pi-gen/deploy/*.img.xz
           retention-days: 30
           compression-level: 0
@@ -664,4 +663,5 @@ jobs:
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Frontends | ${{ needs.build-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| VM (amd64) | ${{ needs.build-vm.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| RPi (arm64) | ${{ needs.build-rpi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| RPi normal (arm64) | ${{ needs.build-rpi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| RPi lite (arm64) | ${{ needs.build-rpi.result }} |" >> $GITHUB_STEP_SUMMARY
