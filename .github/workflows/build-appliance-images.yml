@@ -510,8 +510,9 @@ jobs:
           chmod +x \
             pi-gen/stage2a/prerun.sh \
             pi-gen/stage2a/00-install-curtain/00-run.sh \
-            pi-gen/stage2a/00-install-curtain/01-run-chroot.sh \
-            ${LITE:+pi-gen/stage2a/00-install-curtain/02-run-chroot.sh}
+            pi-gen/stage2a/00-install-curtain/01-run-chroot.sh
+          [ "${LITE}" = "true" ] && \
+            chmod +x pi-gen/stage2a/00-install-curtain/02-run-chroot.sh || true
 
           touch pi-gen/stage3/SKIP pi-gen/stage4/SKIP pi-gen/stage5/SKIP
 
