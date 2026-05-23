@@ -32,17 +32,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Curtain Appliance $TAG" \
-            --notes "## Curtain Appliance $TAG
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Curtain Appliance $TAG" \
+              --notes "## Curtain Appliance $TAG
 
           | Image | Target |
           |-------|--------|
           | \`curtain-vm-amd64.qcow2.xz\` | VM — QEMU / VirtualBox / Proxmox |
           | \`curtain-x86-amd64.img.xz\` | Flashable x86 — USB / SSD |
           | \`curtain-pi-arm64.img.xz\` | Raspberry Pi 3B / 4 / 5 |
-          | \`curtain-pi-lite-arm64.img.xz\` | Raspberry Pi Zero 2 W / 3 A+ (512 MB RAM) |" \
+          | \`curtain-pi-lite-arm64.img.xz\` | Raspberry Pi Zero 2 W / 3 A+ (512 MB RAM) |"
+
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
             artifacts/curtain-vm-amd64/*.qcow2.xz \
             artifacts/curtain-x86-amd64/*.img.xz \
             artifacts/curtain-pi-arm64/*.img.xz \
