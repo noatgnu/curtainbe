@@ -58,7 +58,7 @@ jobs:
           import json
           with open("dist/browser/ngsw.json") as f:
               ngsw = json.load(f)
-          ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
+          ngsw["navigationUrls"] = [{"positive": True, "regex": "^\\/$"}]
           with open("dist/browser/ngsw.json", "w") as f:
               json.dump(ngsw, f)
           PYEOF
@@ -77,7 +77,7 @@ jobs:
           import json
           with open("dist/browser/ngsw.json") as f:
               ngsw = json.load(f)
-          ngsw["navigationUrls"].append({"positive": False, "regex": "^\\\\/admin(\\\\/.*)?$"})
+          ngsw["navigationUrls"] = [{"positive": True, "regex": "^\\/$"}]
           with open("dist/browser/ngsw.json", "w") as f:
               json.dump(ngsw, f)
           PYEOF
