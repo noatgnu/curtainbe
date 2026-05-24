@@ -54,6 +54,8 @@ async function testVhost(context, baseUrl, expectedTitle) {
 
   // --- Frontend loads with correct title ---
   await page.goto(baseUrl + '/', { waitUntil: 'networkidle', timeout: 30000 });
+  // Wait for Angular to finish rendering its template (footer is always present in app shell)
+  await page.waitForSelector('footer', { timeout: 20000 }).catch(() => {});
   const frontendTitle = await page.title();
   if (frontendTitle === expectedTitle) {
     pass(`frontend title "${frontendTitle}"`);
@@ -78,11 +80,6 @@ async function testVhost(context, baseUrl, expectedTitle) {
   }
 
   // --- Admin link exists and points to /admin/ (not /api/admin or missing) ---
-  // Wait up to 5 s for Angular to finish rendering, then inspect all anchors.
-  await page.waitForFunction(
-    () => document.querySelectorAll('a[href]').length > 0,
-    { timeout: 5000 }
-  ).catch(() => {});
 
   const adminLinkResult = await page.evaluate(() => {
     const anchors = Array.from(document.querySelectorAll('a[href]'));
