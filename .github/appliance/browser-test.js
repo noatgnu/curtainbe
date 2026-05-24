@@ -26,15 +26,18 @@ function fail(msg) {
   failed.push(msg);
 }
 
-async function waitForServiceWorker(page) {
-  await page.evaluate(() =>
-    navigator.serviceWorker
-      ? navigator.serviceWorker.ready.then(() => new Promise(resolve => {
-          if (navigator.serviceWorker.controller) return resolve();
-          navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
-        }))
-      : Promise.resolve()
-  );
+async function waitForServiceWorker(page, timeoutMs = 15000) {
+  return Promise.race([
+    page.evaluate(() =>
+      typeof navigator.serviceWorker === 'undefined'
+        ? Promise.resolve()
+        : navigator.serviceWorker.ready.then(() => new Promise(resolve => {
+            if (navigator.serviceWorker.controller) return resolve();
+            navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true });
+          }))
+    ),
+    new Promise(resolve => setTimeout(resolve, timeoutMs)),
+  ]);
 }
 
 async function testVhost(context, baseUrl, expectedTitle) {
@@ -75,12 +78,21 @@ async function testVhost(context, baseUrl, expectedTitle) {
   }
 
   // --- Admin link in footer points to the correct path ---
+  // Wait up to 5 s for Angular to interpolate the href, then read it
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll('a')).some(
+      a => a.textContent.trim() === 'Administration Portal'
+    ),
+    { timeout: 5000 }
+  ).catch(() => {});
+
   const adminHref = await page.evaluate(() => {
     const link = Array.from(document.querySelectorAll('a')).find(
       a => a.textContent.trim() === 'Administration Portal'
     );
     return link ? link.getAttribute('href') : null;
   });
+
   if (adminHref === null) {
     fail('Administration Portal link not found in page');
   } else if (adminHref === '/admin/' || adminHref === '/admin') {
@@ -89,9 +101,8 @@ async function testVhost(context, baseUrl, expectedTitle) {
     fail(`admin link href "${adminHref}" — expected /admin/`);
   }
 
-  // --- Wait for service worker to activate and claim this page ---
+  // --- Wait for service worker to activate (capped at 15 s) ---
   await waitForServiceWorker(page);
-  // Reload so the SW-controlled page is the baseline before opening admin
   await page.reload({ waitUntil: 'networkidle', timeout: 20000 });
 
   await page.close();
@@ -111,7 +122,6 @@ async function testVhost(context, baseUrl, expectedTitle) {
     pass(`/admin/ → Django admin (title: "${adminTitle}", url: ${adminUrl})`);
   }
 
-  // Confirm Django login form is actually present, not a blank SPA shell
   const hasDjangoForm = await adminPage.locator('#login-form, #id_username, .login').count() > 0;
   if (hasDjangoForm) {
     pass('/admin/ contains Django login form');
