@@ -77,28 +77,30 @@ async function testVhost(context, baseUrl, expectedTitle) {
     fail('bootstrap-icons font not resolved (check /media/ serving)');
   }
 
-  // --- Admin link in footer points to the correct path ---
-  // Wait up to 5 s for Angular to interpolate the href, then read it
+  // --- Admin link exists and points to /admin/ (not /api/admin or missing) ---
+  // Wait up to 5 s for Angular to finish rendering, then inspect all anchors.
   await page.waitForFunction(
-    () => Array.from(document.querySelectorAll('a')).some(
-      a => a.textContent.trim() === 'Administration Portal'
-    ),
+    () => document.querySelectorAll('a[href]').length > 0,
     { timeout: 5000 }
   ).catch(() => {});
 
-  const adminHref = await page.evaluate(() => {
-    const link = Array.from(document.querySelectorAll('a')).find(
-      a => a.textContent.trim() === 'Administration Portal'
-    );
-    return link ? link.getAttribute('href') : null;
+  const adminLinkResult = await page.evaluate(() => {
+    const anchors = Array.from(document.querySelectorAll('a[href]'));
+    const adminAnchor = anchors.find(a => {
+      const href = a.getAttribute('href') || '';
+      return href === '/admin' || href === '/admin/' || href.endsWith('/admin') || href.endsWith('/admin/');
+    });
+    if (adminAnchor) return { found: true, href: adminAnchor.getAttribute('href') };
+    // Return all hrefs so the CI log shows what is actually in the page
+    return { found: false, allHrefs: anchors.map(a => a.getAttribute('href')) };
   });
 
-  if (adminHref === null) {
-    fail('Administration Portal link not found in page');
-  } else if (adminHref === '/admin/' || adminHref === '/admin') {
-    pass(`admin link href "${adminHref}"`);
+  if (!adminLinkResult.found) {
+    fail(`no link pointing to /admin/ found — page may be wrong build or admin link removed\n    all hrefs: ${JSON.stringify(adminLinkResult.allHrefs)}`);
+  } else if (adminLinkResult.href === '/admin' || adminLinkResult.href === '/admin/') {
+    pass(`admin link href "${adminLinkResult.href}"`);
   } else {
-    fail(`admin link href "${adminHref}" — expected /admin/`);
+    fail(`admin link href "${adminLinkResult.href}" — expected /admin/ (apiURL leaking into href?)`);
   }
 
   // --- Wait for service worker to activate (capped at 15 s) ---
