@@ -40,6 +40,85 @@ async function waitForServiceWorker(page, timeoutMs = 15000) {
   ]);
 }
 
+/**
+ * Test frontend login via the Angular UI modal.
+ * Curtain exposes a direct "Login" button in the navbar;
+ * CurtainPTM hides it inside a dropdown — try both.
+ */
+async function testFrontendLogin(context, baseUrl) {
+  // --- API-level credential check ---
+  const tokenResp = await context.request.post(baseUrl + '/token/', {
+    data: { username: 'admin', password: 'Curtain123' },
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (tokenResp.status() === 200) {
+    pass('credentials valid — /token/ returned 200');
+  } else {
+    let body = '';
+    try { body = await tokenResp.text(); } catch (_) {}
+    fail(`credentials rejected — /token/ returned ${tokenResp.status()}\n    body: ${body.slice(0, 500)}`);
+    return;
+  }
+
+  // --- Frontend UI login ---
+  const page = await context.newPage();
+  await page.goto(baseUrl + '/', { waitUntil: 'networkidle', timeout: 30000 });
+  await page.waitForSelector('footer', { timeout: 20000 });
+
+  // Try direct Login button first (Curtain navbar).
+  // CurtainPTM hides it in a dropdown, so open the last dropdown toggle if needed.
+  const directBtn = page.locator('button:has-text("Login")').first();
+  const directVisible = await directBtn.isVisible({ timeout: 3000 }).catch(() => false);
+  if (directVisible) {
+    await directBtn.click();
+  } else {
+    const toggles = page.locator('[ngbDropdownToggle]');
+    const count = await toggles.count();
+    for (let i = count - 1; i >= 0; i--) {
+      await toggles.nth(i).click();
+      const inDropdown = page.locator('button:has-text("Login"), [ngbdropdownitem]:has-text("Login")').first();
+      if (await inDropdown.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await inDropdown.click();
+        break;
+      }
+      await toggles.nth(i).click();
+    }
+  }
+
+  // Wait for modal inputs
+  const usernameInput = page.locator('#username');
+  const modalOpened = await usernameInput.waitFor({ timeout: 10000 }).then(() => true).catch(() => false);
+  if (!modalOpened) {
+    fail('frontend login modal did not open');
+    await page.close();
+    return;
+  }
+
+  await page.fill('#username', 'admin');
+  await page.fill('#password', 'Curtain123');
+  await page.locator('button[type=submit]').first().click();
+
+  // Login succeeds when modal closes (username input disappears)
+  const modalClosed = await usernameInput.waitFor({ state: 'hidden', timeout: 15000 })
+    .then(() => true).catch(() => false);
+
+  if (modalClosed) {
+    // Confirm the Login button is gone (user is now authenticated)
+    const loginGone = await page.locator('button:has-text("Login")').count() === 0;
+    if (loginGone) {
+      pass('frontend UI login succeeded — Login button no longer visible');
+    } else {
+      const errText = await page.locator('.alert-danger').textContent().catch(() => '');
+      fail(`frontend UI login — modal closed but Login button still present (${errText.trim()})`);
+    }
+  } else {
+    const errText = await page.locator('.alert-danger').textContent().catch(() => '');
+    fail(`frontend UI login failed — modal did not close (${errText.trim() || 'no error shown'})`);
+  }
+
+  await page.close();
+}
+
 async function testVhost(context, baseUrl, expectedTitle) {
   console.log(`\nTesting ${baseUrl}`);
 
@@ -55,8 +134,6 @@ async function testVhost(context, baseUrl, expectedTitle) {
   // --- Frontend loads with correct title ---
   await page.goto(baseUrl + '/', { waitUntil: 'networkidle', timeout: 30000 });
 
-  // Wait for Angular to finish rendering its template.
-  // footer is unconditionally in app.component.html so its presence confirms Angular rendered.
   const angularRendered = await page.waitForSelector('footer', { timeout: 20000 })
     .then(() => true).catch(() => false);
   if (!angularRendered) {
@@ -87,8 +164,7 @@ async function testVhost(context, baseUrl, expectedTitle) {
     fail('bootstrap-icons font not resolved (check /media/ serving)');
   }
 
-  // --- Admin link exists and points to /admin/ (not /api/admin or missing) ---
-
+  // --- Admin link points to /admin/ ---
   const adminLinkResult = await page.evaluate(() => {
     const anchors = Array.from(document.querySelectorAll('a[href]'));
     const adminAnchor = anchors.find(a => {
@@ -96,30 +172,26 @@ async function testVhost(context, baseUrl, expectedTitle) {
       return href === '/admin' || href === '/admin/' || href.endsWith('/admin') || href.endsWith('/admin/');
     });
     if (adminAnchor) return { found: true, href: adminAnchor.getAttribute('href') };
-    // Return all hrefs so the CI log shows what is actually in the page
     return { found: false, allHrefs: anchors.map(a => a.getAttribute('href')) };
   });
 
   if (!adminLinkResult.found) {
-    fail(`no link pointing to /admin/ found — page may be wrong build or admin link removed\n    all hrefs in page: ${JSON.stringify(adminLinkResult.allHrefs)}`);
+    fail(`no link pointing to /admin/ found\n    all hrefs in page: ${JSON.stringify(adminLinkResult.allHrefs)}`);
   } else if (adminLinkResult.href === '/admin' || adminLinkResult.href === '/admin/') {
     pass(`admin link href "${adminLinkResult.href}"`);
   } else {
     fail(`admin link href "${adminLinkResult.href}" — expected /admin/ (apiURL leaking into href?)`);
   }
 
-  // --- Wait for service worker to activate (capped at 15 s) ---
+  // --- Wait for service worker to activate ---
   await waitForServiceWorker(page);
   await page.reload({ waitUntil: 'networkidle', timeout: 20000 });
 
   await page.close();
 
-  // --- Admin navigates to Django, not Angular SPA (SW is now active) ---
+  // --- /admin/ serves Django, not Angular SPA ---
   const adminPage = await context.newPage();
-  await adminPage.goto(baseUrl + '/admin/', {
-    waitUntil: 'domcontentloaded',
-    timeout: 20000,
-  });
+  await adminPage.goto(baseUrl + '/admin/', { waitUntil: 'domcontentloaded', timeout: 20000 });
   const adminTitle = await adminPage.title();
   const adminUrl = adminPage.url();
 
@@ -133,10 +205,30 @@ async function testVhost(context, baseUrl, expectedTitle) {
   if (hasDjangoForm) {
     pass('/admin/ contains Django login form');
   } else {
-    fail('/admin/ missing Django login form — page may be SPA shell or error page');
+    fail('/admin/ missing Django login form');
+  }
+
+  // --- Django admin login ---
+  if (hasDjangoForm) {
+    await adminPage.fill('#id_username', 'admin');
+    await adminPage.fill('#id_password', 'Curtain123');
+    await Promise.all([
+      adminPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+      adminPage.click('[type=submit]'),
+    ]);
+    const afterLoginUrl = adminPage.url();
+    const afterLoginTitle = await adminPage.title();
+    if (afterLoginUrl.includes('/admin/login/')) {
+      fail(`Django admin login failed — still on login page (title: "${afterLoginTitle}")`);
+    } else {
+      pass(`Django admin login succeeded → ${afterLoginUrl}`);
+    }
   }
 
   await adminPage.close();
+
+  // --- Frontend UI login ---
+  await testFrontendLogin(context, baseUrl);
 
   // --- API is reachable ---
   const apiResp = await context.request.get(baseUrl + '/curtain/');

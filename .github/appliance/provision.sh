@@ -38,10 +38,14 @@ cd /opt/curtain/backend
 set -a; source /opt/curtain/.env; set +a
 /opt/curtain/venv/bin/python manage.py migrate --noinput
 /opt/curtain/venv/bin/python manage.py collectstatic --noinput
-DJANGO_SUPERUSER_USERNAME=admin \
-DJANGO_SUPERUSER_EMAIL=admin@curtain.local \
-DJANGO_SUPERUSER_PASSWORD=curtain \
-/opt/curtain/venv/bin/python manage.py createsuperuser --noinput
+/opt/curtain/venv/bin/python manage.py shell -c "
+from django.contrib.auth.models import User
+if not User.objects.filter(username='admin').exists():
+    User.objects.create_superuser('admin', 'admin@curtain.local', 'Curtain123')
+    print('Superuser created')
+else:
+    print('Superuser already exists')
+"
 
 mkdir -p /etc/ssl/curtain
 openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
