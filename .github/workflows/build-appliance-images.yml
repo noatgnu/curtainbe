@@ -337,12 +337,11 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "=== API pre-check (curl) ==="
-          curl -sfk -D - https://localhost:8443/curtain/ 2>&1 | head -80 || true
+          curl -sfk -D - https://curtain.local/curtain/ 2>&1 | head -80 || true
 
-          C_IP=$(avahi-resolve --name curtain.local 2>/dev/null | awk '{print $2}')
-          [ -n "$C_IP" ] && echo "$C_IP curtain.local" | sudo tee -a /etc/hosts || true
+          echo "10.0.5.10 curtain.local" | sudo tee -a /etc/hosts
           node .github/appliance/browser-test.js \
-            https://localhost:8443 \
+            https://curtain.local \
             https://curtainptm.local
 
       - name: Prepare bare-metal image

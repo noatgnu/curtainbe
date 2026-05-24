@@ -65,23 +65,39 @@ async function testFrontendLogin(context, baseUrl) {
   await page.goto(baseUrl + '/', { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForSelector('footer', { timeout: 20000 });
 
-  // Try direct Login button first (Curtain navbar).
-  // CurtainPTM hides it in a dropdown, so open the last dropdown toggle if needed.
-  const directBtn = page.locator('button:has-text("Login")').first();
-  const directVisible = await directBtn.isVisible({ timeout: 3000 }).catch(() => false);
-  if (directVisible) {
-    await directBtn.click();
+  // Wait for the Login button to exist in the DOM (may be inside a closed dropdown).
+  const loginBtnExists = await page.waitForSelector('button:has-text("Login")', { timeout: 15000 })
+    .then(() => true).catch(() => false);
+  if (!loginBtnExists) {
+    fail('frontend login button not found in DOM');
+    await page.close();
+    return;
+  }
+
+  const loginBtn = page.locator('button:has-text("Login")').first();
+  if (await loginBtn.isVisible()) {
+    // Curtain: Login button is directly visible in navbar
+    await loginBtn.click();
   } else {
+    // CurtainPTM: Login is inside a collapsed dropdown — open each toggle until it appears
+    let opened = false;
     const toggles = page.locator('[ngbDropdownToggle]');
     const count = await toggles.count();
     for (let i = count - 1; i >= 0; i--) {
-      await toggles.nth(i).click();
-      const inDropdown = page.locator('button:has-text("Login"), [ngbdropdownitem]:has-text("Login")').first();
-      if (await inDropdown.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await inDropdown.click();
+      const toggle = toggles.nth(i);
+      if (!await toggle.isVisible().catch(() => false)) continue;
+      await toggle.click();
+      if (await loginBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await loginBtn.click();
+        opened = true;
         break;
       }
-      await toggles.nth(i).click();
+      await toggle.click();
+    }
+    if (!opened) {
+      fail('could not open Login button — not found in navbar or any dropdown');
+      await page.close();
+      return;
     }
   }
 
