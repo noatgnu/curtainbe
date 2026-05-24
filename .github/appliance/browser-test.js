@@ -54,8 +54,16 @@ async function testVhost(context, baseUrl, expectedTitle) {
 
   // --- Frontend loads with correct title ---
   await page.goto(baseUrl + '/', { waitUntil: 'networkidle', timeout: 30000 });
-  // Wait for Angular to finish rendering its template (footer is always present in app shell)
-  await page.waitForSelector('footer', { timeout: 20000 }).catch(() => {});
+
+  // Wait for Angular to finish rendering its template.
+  // footer is unconditionally in app.component.html so its presence confirms Angular rendered.
+  const angularRendered = await page.waitForSelector('footer', { timeout: 20000 })
+    .then(() => true).catch(() => false);
+  if (!angularRendered) {
+    const bodySnippet = await page.evaluate(() => document.body.innerHTML.slice(0, 1000));
+    fail(`Angular did not render within 20 s — app may have crashed\n    body: ${bodySnippet}`);
+  }
+
   const frontendTitle = await page.title();
   if (frontendTitle === expectedTitle) {
     pass(`frontend title "${frontendTitle}"`);
@@ -93,7 +101,7 @@ async function testVhost(context, baseUrl, expectedTitle) {
   });
 
   if (!adminLinkResult.found) {
-    fail(`no link pointing to /admin/ found — page may be wrong build or admin link removed\n    all hrefs: ${JSON.stringify(adminLinkResult.allHrefs)}`);
+    fail(`no link pointing to /admin/ found — page may be wrong build or admin link removed\n    all hrefs in page: ${JSON.stringify(adminLinkResult.allHrefs)}`);
   } else if (adminLinkResult.href === '/admin' || adminLinkResult.href === '/admin/') {
     pass(`admin link href "${adminLinkResult.href}"`);
   } else {
