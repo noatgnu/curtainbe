@@ -65,45 +65,31 @@ async function testFrontendLogin(context, baseUrl) {
   await page.goto(baseUrl + '/', { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForSelector('footer', { timeout: 20000 });
 
-  // Wait for Angular navbar to render (dropdown toggles are always present once the component mounts).
-  // Do NOT wait for the Login button itself — NgBootstrap renders dropdown menus lazily so the
-  // button may not be in the DOM until its parent dropdown is opened for the first time.
-  const navbarReady = await page.waitForSelector('[ngbDropdownToggle]', { timeout: 15000 })
+  // Wait for the Session dropdown toggle — present in both Curtain and CurtainPTM once the
+  // navbar component mounts. The Login item lives inside this dropdown in both apps.
+  const sessionToggleReady = await page.waitForSelector('#dropdownSession', { timeout: 15000 })
     .then(() => true).catch(() => false);
-  if (!navbarReady) {
-    fail('Angular navbar did not render — no dropdown toggles found within 15 s');
+  if (!sessionToggleReady) {
+    fail('Angular navbar did not render — #dropdownSession not found within 15 s');
     await page.close();
     return;
   }
 
-  const loginBtn = page.locator('button:has-text("Login")').first();
+  // Open the Session dropdown and click the Login item inside it.
+  await page.click('#dropdownSession');
 
-  // Try direct visibility first (standalone Login button in navbar), then fall through to
-  // opening each dropdown in reverse order until the Login item becomes visible.
-  let clicked = false;
-  if (await loginBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await loginBtn.click();
-    clicked = true;
-  } else {
-    const toggles = page.locator('[ngbDropdownToggle]');
-    const count = await toggles.count();
-    for (let i = count - 1; i >= 0; i--) {
-      const toggle = toggles.nth(i);
-      if (!await toggle.isVisible().catch(() => false)) continue;
-      await toggle.click();
-      if (await loginBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-        await loginBtn.click();
-        clicked = true;
-        break;
-      }
-      await toggle.click();
-    }
-  }
-  if (!clicked) {
-    fail('could not find and click Login button — not visible in navbar or any dropdown');
+  // The Login button is a .dropdown-item inside the now-open Session menu.
+  const loginBtn = page.locator('button.dropdown-item', { hasText: 'Login' }).first();
+  const loginVisible = await loginBtn.waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true).catch(() => false);
+
+  if (!loginVisible) {
+    fail('Login item not visible inside #dropdownSession menu');
     await page.close();
     return;
   }
+
+  await loginBtn.click();
 
   // Wait for modal inputs
   const usernameInput = page.locator('#username');
