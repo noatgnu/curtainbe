@@ -90,7 +90,7 @@ set -a; source /opt/curtain/.env; set +a
 /opt/curtain/venv/bin/python manage.py collectstatic --noinput
 DJANGO_SUPERUSER_USERNAME=admin \
 DJANGO_SUPERUSER_EMAIL=admin@curtain.local \
-DJANGO_SUPERUSER_PASSWORD=curtain \
+DJANGO_SUPERUSER_PASSWORD=Curtain123 \
 /opt/curtain/venv/bin/python manage.py createsuperuser --noinput
 
 echo "=== CURTAIN: SSL certificate ==="
@@ -128,24 +128,12 @@ server {
     include /etc/nginx/snippets/curtain-ssl.conf;
     client_max_body_size 2G;
     root /opt/curtain/curtain;
-    index index.html;
     charset utf-8;
     gzip on;
     gzip_vary on;
     gzip_types text/css application/javascript text/javascript application/json image/svg+xml;
 
-    location / { try_files $uri $uri/ /index.html; }
-
-    location /api/ {
-        proxy_pass http://curtain_backend/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-    }
-
-    location /admin {
+    location ^~ /admin {
         proxy_pass http://curtain_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -157,7 +145,7 @@ server {
         sub_filter_once off;
     }
 
-    location /ws/ {
+    location ^~ /ws/ {
         proxy_pass http://curtain_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -166,8 +154,26 @@ server {
         proxy_read_timeout 86400s;
     }
 
-    location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
-    location /media/  { alias /opt/curtain/curtain/media/; }
+    location ^~ /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
+
+    location ^~ /media/ { alias /opt/curtain/curtain/media/; }
+
+    location = / {
+        try_files /index.html =404;
+    }
+
+    location ~* \.(js|css|json|ico|webmanifest|txt|svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2|tsv|map)$ {
+        try_files $uri =404;
+    }
+
+    location / {
+        proxy_pass http://curtain_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
 }
 NGXEOF
 
@@ -179,24 +185,12 @@ server {
     include /etc/nginx/snippets/curtain-ssl.conf;
     client_max_body_size 2G;
     root /opt/curtain/curtainptm;
-    index index.html;
     charset utf-8;
     gzip on;
     gzip_vary on;
     gzip_types text/css application/javascript text/javascript application/json image/svg+xml;
 
-    location / { try_files $uri $uri/ /index.html; }
-
-    location /api/ {
-        proxy_pass http://curtain_backend/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-    }
-
-    location /admin {
+    location ^~ /admin {
         proxy_pass http://curtain_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -208,7 +202,7 @@ server {
         sub_filter_once off;
     }
 
-    location /ws/ {
+    location ^~ /ws/ {
         proxy_pass http://curtain_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -217,8 +211,26 @@ server {
         proxy_read_timeout 86400s;
     }
 
-    location /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
-    location /media/  { alias /opt/curtain/curtainptm/media/; }
+    location ^~ /static/ { alias /opt/curtain/backend/staticfiles/; expires 7d; }
+
+    location ^~ /media/ { alias /opt/curtain/curtainptm/media/; }
+
+    location = / {
+        try_files /index.html =404;
+    }
+
+    location ~* \.(js|css|json|ico|webmanifest|txt|svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2|tsv|map)$ {
+        try_files $uri =404;
+    }
+
+    location / {
+        proxy_pass http://curtain_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
 }
 NGXEOF
 
