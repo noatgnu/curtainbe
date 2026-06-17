@@ -425,7 +425,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             return Response(status=status.HTTP_401_UNAUTHORIZED)
         return self.create_encrypted(request, **kwargs)
 
-r    @action(methods=["patch"], detail=True, permission_classes=[IsAdminUserOrCurtainOwner])
+    @action(methods=["patch"], detail=True, permission_classes=[IsAdminUserOrCurtainOwner])
     def api_update(self, request, **kwargs):
         """
         Updates a Curtain using an API key.
