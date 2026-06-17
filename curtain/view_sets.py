@@ -41,7 +41,8 @@ import io
 from curtain.models import Curtain, CurtainAccessToken, KinaseLibraryModel, DataFilterList, UserPublicKey, UserAPIKey, \
     DataAESEncryptionFactors, LastAccess, DataCite, Announcement, PermanentLinkRequest, CurtainCollection
 from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtainOwnerOrPublic, HasCurtainToken, \
-    IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey, IsCollectionOwner
+    IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey, IsCollectionOwner, \
+    IsAdminUserOrCurtainOwner
 from curtain.pydantic_models import DataCiteForm
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
     UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer, AnnouncementSerializer, PermanentLinkRequestSerializer, \
@@ -168,6 +169,11 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             return [UploadThrottle(), SustainedRateThrottle()]
         return [BurstRateThrottle(), SustainedRateThrottle()]
 
+    def get_permissions(self):
+        if self.action in ['update', 'partial_update']:
+            return [IsAdminUserOrCurtainOwner()]
+        return [permission() for permission in self.permission_classes]
+
     def get_queryset(self):
         latest_last_access_subquery = LastAccess.objects.filter(
             curtain=OuterRef('pk')
@@ -222,7 +228,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             except FileNotFoundError:
                 return Response(status=status.HTTP_404_NOT_FOUND)
 
-    @action(methods=["post"], detail=True, permission_classes=[permissions.IsAdminUser | IsCurtainOwner])
+    @action(methods=["post"], detail=True, permission_classes=[IsAdminUserOrCurtainOwner])
     def generate_token(self, request, pk=None, link_id=None):
         """
         Generates a time-limited access token for a Curtain.
@@ -419,7 +425,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             return Response(status=status.HTTP_401_UNAUTHORIZED)
         return self.create_encrypted(request, **kwargs)
 
-    @action(methods=["patch"], detail=True, permission_classes=[permissions.IsAdminUser | IsCurtainOwner])
+r    @action(methods=["patch"], detail=True, permission_classes=[IsAdminUserOrCurtainOwner])
     def api_update(self, request, **kwargs):
         """
         Updates a Curtain using an API key.
@@ -476,9 +482,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         curtain_json = CurtainSerializer(c, many=False, context={"request": request})
         return Response(data=curtain_json.data)
 
-    @action(methods=["get"], detail=True, permission_classes=[
-        permissions.IsAdminUser | IsCurtainOwner
-    ])
+    @action(methods=["get"], detail=True, permission_classes=[IsAdminUserOrCurtainOwner])
     def get_ownership(self, request, pk=None, link_id=None):
         """
         Checks if the current user is an owner of the Curtain.
@@ -501,9 +505,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
             owners.append({"id": i.id, "username": i.username})
         return Response(data={"link_id": link_id, "owners": owners})
 
-    @action(methods=["patch"], detail=True, permission_classes=[
-        permissions.IsAdminUser | IsCurtainOwner
-    ])
+    @action(methods=["patch"], detail=True, permission_classes=[IsAdminUserOrCurtainOwner])
     def add_owner(self, request, pk=None, link_id=None):
         """
         Adds a new owner to the Curtain.
@@ -527,9 +529,7 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         else:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-    @action(methods=["patch"], detail=True, permission_classes=[
-        permissions.IsAdminUser | IsCurtainOwner
-    ])
+    @action(methods=["patch"], detail=True, permission_classes=[IsAdminUserOrCurtainOwner])
     def remove_owner(self, request, pk=None, link_id=None):
         """
         Removes an owner from the Curtain.

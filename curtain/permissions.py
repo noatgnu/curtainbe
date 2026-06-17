@@ -68,6 +68,24 @@ class IsCurtainOwner(BasePermission):
         return False
 
 
+class IsAdminUserOrCurtainOwner(BasePermission):
+    """
+    Allows access only to staff users or owners of the Curtain object.
+
+    Unlike `permissions.IsAdminUser | IsCurtainOwner`, this checks staff status
+    at the object level too. `IsAdminUser` never overrides `has_object_permission`,
+    so it inherits `BasePermission`'s default of `True` - ORing it with another
+    permission makes the object-level check always pass, regardless of ownership.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated)
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.is_staff:
+            return True
+        return bool(request.user in obj.owners.all())
+
+
 class IsDataFilterListOwner(BasePermission):
     def has_object_permission(self, request, view, obj):
         if bool(request.user and request.user.is_authenticated):
