@@ -988,7 +988,7 @@ class DataCiteAdmin(admin.ModelAdmin):
     autocomplete_fields = ('user', 'curtain', 'collection')
     date_hierarchy = 'updated'
     list_per_page = 20
-    actions = ['approve_datacite', 'reject_datacite', 'unlock_datacite']
+    actions = ['approve_datacite', 'reject_datacite', 'unlock_datacite', 'rebuild_datacite_files']
 
     fieldsets = (
         ('Basic Information', {
@@ -1161,6 +1161,15 @@ class DataCiteAdmin(admin.ModelAdmin):
 
 
     approve_datacite.short_description = "Approve selected DataCite(s)"
+
+    def rebuild_datacite_files(self, request, queryset):
+        count = 0
+        for datacite in queryset:
+            datacite.rebuild_local_files(request=request)
+            count += 1
+        self.message_user(request, f"Successfully rebuilt local files for {count} DataCite object(s).")
+
+    rebuild_datacite_files.short_description = "Rebuild local files for selected DataCite(s)"
 
 admin.site.register(DataCite, DataCiteAdmin)
 

@@ -6,10 +6,12 @@ from django.core.signing import TimestampSigner
 from django.urls import reverse
 from django.test import override_settings
 from django.core.management import call_command
+from django.contrib.admin.sites import AdminSite
 from rest_framework.test import APIClient
 from rest_framework import status
 from unittest.mock import patch, MagicMock
 from curtain.models import ExtraProperties, SocialPlatform, UserPublicKey, Curtain, CurtainCollection, DataCite
+from curtain.admin import DataCiteAdmin
 from curtainbe import settings
 
 
@@ -287,3 +289,28 @@ class DataCiteViewSetsTest(TestCase):
         self.assertIn("Curtain Main Session Data", alternate_id_types)
         self.assertIn("Curtain Alternative Session Data", alternate_id_types)
         self.assertIn("Curtain Collection Metadata", alternate_id_types)
+
+    def test_rebuild_datacite_files_admin_action(self):
+        # Instantiate model admin
+        admin_instance = DataCiteAdmin(model=DataCite, admin_site=AdminSite())
+        
+        datacite_obj = DataCite.objects.create(
+            user=self.user,
+            curtain=self.main_curtain,
+            collection=self.collection,
+            title="Admin Old Title",
+            contact_email="test@example.com",
+            pii_statement="None"
+        )
+        
+        mock_request = MagicMock()
+        mock_request.build_absolute_uri.side_effect = lambda path: f"http://testserver{path}"
+        mock_queryset = DataCite.objects.filter(id=datacite_obj.id)
+        
+        # Run action
+        admin_instance.rebuild_datacite_files(mock_request, mock_queryset)
+        
+        # Verify
+        datacite_obj.refresh_from_db()
+        self.assertTrue(bool(datacite_obj.local_file))
+        self.assertEqual(datacite_obj.local_file.read(), b"main session content")
