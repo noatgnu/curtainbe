@@ -148,7 +148,7 @@ class DataCiteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DataCite
-        fields = ["id", "updated", "created", "curtain", "curtain_type", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock", "local_file", "public_file_url"]
+        fields = ["id", "updated", "created", "curtain", "curtain_type", "collection", "doi", "status", "user", "title", "form_data", "contact_email", "pii_statement", "lock", "local_file", "public_file_url"]
 
 
 class AnnouncementSerializer(serializers.ModelSerializer):

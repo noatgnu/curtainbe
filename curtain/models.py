@@ -1,11 +1,16 @@
 import uuid
+import json
+import io
+import os
 from datetime import timedelta
 
 from django.core.mail import send_mail
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.urls import reverse
 from rest_framework_api_key.crypto import KeyGenerator
+from datacite import DataCiteRESTClient
 
 from curtainbe import settings
 from rest_framework_api_key.models import AbstractAPIKey, BaseAPIKeyManager
@@ -247,6 +252,151 @@ class DataCite(models.Model):
             [self.contact_email],
             fail_silently=False,
         )
+
+    def rebuild_local_files(self, request=None, update_doi_api=False):
+        """
+        Rebuilds the local file (copy of main curtain file), local storage for collection sessions,
+        collection metadata JSON, and updates alternateIdentifiers list.
+        """
+
+
+        # 1. Rebuild main local_file from curtain
+        if self.curtain and self.curtain.file:
+            if self.local_file:
+                # Delete existing file from local storage to prevent duplicate names
+                try:
+                    self.local_file.delete(save=False)
+                except Exception:
+                    pass
+            self.local_file.save(
+                self.curtain.file.name,
+                self.curtain.file,
+                save=False
+            )
+            self.save(update_fields=['local_file'])
+
+        # Get file URL
+        if self.local_file:
+            file_path = reverse('datacite_file', kwargs={'datacite_id': self.id})
+            if settings.SITE_DOMAIN:
+                file_url = f"{settings.SITE_DOMAIN.rstrip('/')}{file_path}"
+            elif request:
+                file_url = request.build_absolute_uri(file_path)
+            else:
+                file_url = f"http://localhost:8000{file_path}"
+        else:
+            file_url = None
+
+        # Re-initialize or copy form_data
+        form_data = self.form_data or {}
+        if "alternateIdentifiers" not in form_data:
+            form_data["alternateIdentifiers"] = []
+        else:
+            # Filter out existing alternate identifiers that we will rebuild
+            form_data["alternateIdentifiers"] = [
+                ident for ident in form_data["alternateIdentifiers"]
+                if ident.get("alternateIdentifierType") not in [
+                    "Curtain Main Session Data", 
+                    "Direct data access URL",
+                    "Curtain Alternative Session Data",
+                    "Curtain Collection Metadata"
+                ]
+            ]
+
+        # Add main session identifier
+        if file_url:
+            identifier_type = "Curtain Main Session Data" if self.collection else "Direct data access URL"
+            form_data["alternateIdentifiers"].append({
+                "alternateIdentifier": file_url,
+                "alternateIdentifierType": identifier_type
+            })
+
+        # 2. Rebuild collection files and metadata JSON
+        if self.collection:
+            collection_metadata = {
+                "collection_id": self.collection.id,
+                "collection_name": self.collection.name,
+                "collection_description": self.collection.description,
+                "main_session": {
+                    "curtain_id": self.curtain.id if self.curtain else None,
+                    "link_id": self.curtain.link_id if self.curtain else None
+                },
+                "sessions": []
+            }
+
+            collection_sessions = self.collection.curtains.filter(enable=True)
+            if self.curtain:
+                collection_sessions = collection_sessions.exclude(id=self.curtain.id)
+
+            local_storage = DataCiteLocalStorage()
+            for curtain_session in collection_sessions:
+                if not curtain_session.file:
+                    continue
+                filename = f"collection_{self.collection.id}_{curtain_session.id}_{curtain_session.file.name.split('/')[-1]}"
+                if local_storage.exists(filename):
+                    try:
+                        local_storage.delete(filename)
+                    except Exception:
+                        pass
+                saved_name = local_storage.save(filename, curtain_session.file)
+
+                if settings.SITE_DOMAIN:
+                    session_file_url = f"{settings.SITE_DOMAIN.rstrip('/')}{local_storage.url(saved_name)}"
+                elif request:
+                    session_file_url = request.build_absolute_uri(local_storage.url(saved_name))
+                else:
+                    session_file_url = f"http://localhost:8000{local_storage.url(saved_name)}"
+
+                form_data["alternateIdentifiers"].append({
+                    "alternateIdentifier": session_file_url,
+                    "alternateIdentifierType": "Curtain Alternative Session Data"
+                })
+
+                collection_metadata["sessions"].append({
+                    "curtain_id": curtain_session.id,
+                    "link_id": curtain_session.link_id,
+                    "data_url": session_file_url,
+                    "name": curtain_session.name,
+                    "description": curtain_session.description
+                })
+
+            collection_json = json.dumps(collection_metadata, indent=2)
+            collection_json_file = io.BytesIO(collection_json.encode('utf-8'))
+
+            collection_json_filename = f"collection_{self.collection.id}_metadata.json"
+            os.makedirs(os.path.join(settings.MEDIA_ROOT, 'datacite_files'), exist_ok=True)
+            with open(os.path.join(settings.MEDIA_ROOT, 'datacite_files', collection_json_filename), 'wb') as f:
+                f.write(collection_json_file.getvalue())
+
+            if settings.SITE_DOMAIN:
+                collection_metadata_url = f"{settings.SITE_DOMAIN.rstrip('/')}/media/datacite_files/{collection_json_filename}"
+            elif request:
+                collection_metadata_url = request.build_absolute_uri(f"/media/datacite_files/{collection_json_filename}")
+            else:
+                collection_metadata_url = f"http://localhost:8000/media/datacite_files/{collection_json_filename}"
+
+            form_data["alternateIdentifiers"].append({
+                "alternateIdentifier": collection_metadata_url,
+                "alternateIdentifierType": "Curtain Collection Metadata"
+            })
+
+        self.form_data = form_data
+        self.save(update_fields=['form_data'])
+
+        # 3. Optionally update the DOI on DataCite API
+        if update_doi_api and self.doi and settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
+            try:
+                client = DataCiteRESTClient(
+                    username=settings.DATACITE_USERNAME,
+                    password=settings.DATACITE_PASSWORD,
+                    prefix=settings.DATACITE_PREFIX,
+                    test_mode=settings.DATACITE_TEST_MODE
+                )
+                client.update_doi(doi=self.doi, metadata=self.form_data)
+                if self.status == 'published':
+                    client.show_doi(doi=self.doi)
+            except Exception:
+                pass
 
 class LastAccess(models.Model):
     """
