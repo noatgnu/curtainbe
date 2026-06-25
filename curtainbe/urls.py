@@ -25,7 +25,7 @@ from curtain.view_sets import UserViewSet, KinaseLibraryViewSet, DataFilterListV
     CurtainCollectionViewSet
 from curtain.views import LogoutView, UserView, SitePropertiesView, ORCIDOAUTHView, KinaseLibraryProxyView, \
     DownloadStatsView, InteractomeAtlasProxyView, PrimitiveStatsTestView, CompareSessionView, StatsView, JobResultView, \
-    APIKeyView, DataCiteFileView, CustomTokenObtainPairView
+    APIKeyView, DataCiteFileView, CustomTokenObtainPairView, DataCiteMediaView
 from curtain.chunked_upload import CurtainChunkedUploadView
 from curtain.admin import admin_dashboard
 from django.contrib import admin
@@ -63,6 +63,7 @@ urlpatterns = [
     path('stats/summary/<int:last_n_days>/', StatsView.as_view(), name="stats_summary"),
     path(r'job/<str:job_id>/', JobResultView.as_view(), name='job_result'),
     path('datacite/file/<int:datacite_id>/', DataCiteFileView.as_view(), name='datacite_file'),
+    path('media/datacite/<path:filepath>', DataCiteMediaView.as_view(), name='datacite_media'),
     path('curtain-chunked-upload/', CurtainChunkedUploadView.as_view(), name='curtain_chunked_upload'),
     path('curtain-chunked-upload/<uuid:pk>/', CurtainChunkedUploadView.as_view(), name='curtain_chunked_upload_detail'),
     path('admin/dashboard/', admin.site.admin_view(admin_dashboard), name='admin_dashboard'),

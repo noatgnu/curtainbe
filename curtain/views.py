@@ -22,6 +22,7 @@ from scipy.stats import ttest_ind
 from django.contrib.auth.base_user import BaseUserManager
 from django.utils.crypto import get_random_string
 from curtain.models import User, ExtraProperties, SocialPlatform, Curtain, UserAPIKey, DataCite
+from curtain.storage import DataCiteLocalStorage
 from curtainbe import settings
 import requests
 from request.models import Request
@@ -489,4 +490,24 @@ class DataCiteFileView(APIView):
             return response
         except DataCite.DoesNotExist:
             raise Http404("DataCite not found")
+
+
+class DataCiteMediaView(APIView):
+    """
+    Public view for serving DataCite metadata and alternative session files.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, filepath):
+        storage = DataCiteLocalStorage()
+        if not storage.exists(filepath):
+            raise Http404("File not found")
+
+        try:
+            f = storage.open(filepath, 'rb')
+            response = FileResponse(f, content_type='application/json')
+            response['Content-Disposition'] = f'inline; filename="{filepath.split("/")[-1]}"'
+            return response
+        except Exception as e:
+            raise Http404(f"File could not be opened: {e}")
 
