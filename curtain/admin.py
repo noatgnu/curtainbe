@@ -1,3 +1,4 @@
+import json
 from datacite import DataCiteRESTClient
 from django.contrib import admin, messages
 from django.contrib.admin.exceptions import NotRegistered
@@ -1092,9 +1093,81 @@ class DataCiteAdmin(admin.ModelAdmin):
             form = DataCiteForm(request.POST, instance=datacite)
             creators_formset = formset_factory(CreatorForm)(request.POST, prefix='creators')
             titles_formset = formset_factory(TitleForm)(request.POST, prefix='titles')
-            # Add other formsets similarly
-            if form.is_valid() and creators_formset.is_valid() and titles_formset.is_valid():
+            subjects_formset = formset_factory(SubjectForm)(request.POST, prefix='subjects')
+            contributors_formset = formset_factory(ContributorForm)(request.POST, prefix='contributors')
+            descriptions_formset = formset_factory(DescriptionForm)(request.POST, prefix='descriptions')
+            rightsList_formset = formset_factory(RightsForm)(request.POST, prefix='rightsList')
+            alternateIdentifiers_formset = formset_factory(AlternateIdentifierForm)(request.POST, prefix='alternateIdentifiers')
+            related_identifiers_formset = formset_factory(RelatedIdentifierForm)(request.POST, prefix='relatedIdentifiers')
+            fundingReferences_formset = formset_factory(FundingReferenceForm)(request.POST, prefix='fundingReferences')
+
+            formsets_are_valid = (
+                creators_formset.is_valid() and
+                titles_formset.is_valid() and
+                subjects_formset.is_valid() and
+                contributors_formset.is_valid() and
+                descriptions_formset.is_valid() and
+                rightsList_formset.is_valid() and
+                alternateIdentifiers_formset.is_valid() and
+                related_identifiers_formset.is_valid() and
+                fundingReferences_formset.is_valid()
+            )
+
+            if form.is_valid() and formsets_are_valid:
                 datacite = form.save(commit=False)
+                new_form_data = datacite.form_data or {}
+
+                # Safely parse JSON strings for dict fields
+                def safe_json_load(val):
+                    if isinstance(val, str) and val.strip():
+                        try:
+                            return json.loads(val)
+                        except:
+                            pass
+                    return val
+
+                new_form_data.update({
+                    'schemaVersion': form.cleaned_data.get('schemaVersion'),
+                    'prefix': form.cleaned_data.get('prefix'),
+                    'suffix': form.cleaned_data.get('suffix'),
+                    'url': form.cleaned_data.get('url'),
+                    'publisher': safe_json_load(form.cleaned_data.get('publisher')),
+                    'publicationYear': form.cleaned_data.get('publicationYear'),
+                    'types': safe_json_load(form.cleaned_data.get('types')),
+                })
+
+                # Helper to map validated formset entries back to lists of dicts
+                def get_cleaned_list(formset):
+                    cleaned_list = []
+                    for fs_form in formset:
+                        if fs_form.cleaned_data and not fs_form.cleaned_data.get('DELETE', False):
+                            non_empty_fields = {k: v for k, v in fs_form.cleaned_data.items() if k != 'DELETE' and v is not None and str(v).strip() != ''}
+                            if not non_empty_fields:
+                                continue
+                            
+                            item = {}
+                            for k, v in fs_form.cleaned_data.items():
+                                if k != 'DELETE':
+                                    if k == 'descriptionType' and (v is None or str(v).strip() == ''):
+                                        v = 'Abstract'
+                                    item[k] = v
+                            cleaned_list.append(item)
+                    return cleaned_list
+
+                new_form_data['creators'] = get_cleaned_list(creators_formset)
+                new_form_data['titles'] = get_cleaned_list(titles_formset)
+                new_form_data['subjects'] = get_cleaned_list(subjects_formset)
+                new_form_data['contributors'] = get_cleaned_list(contributors_formset)
+                new_form_data['descriptions'] = get_cleaned_list(descriptions_formset)
+                new_form_data['rightsList'] = get_cleaned_list(rightsList_formset)
+                new_form_data['alternateIdentifiers'] = get_cleaned_list(alternateIdentifiers_formset)
+                new_form_data['relatedIdentifiers'] = get_cleaned_list(related_identifiers_formset)
+                new_form_data['fundingReferences'] = get_cleaned_list(fundingReferences_formset)
+
+                datacite.form_data = new_form_data
+
+                original_status = DataCite.objects.get(pk=datacite.pk).status
+                publish_failed = False
                 if datacite.status == 'published':
                     if settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
                         try:
@@ -1106,13 +1179,19 @@ class DataCiteAdmin(admin.ModelAdmin):
                             )
                             client.show_doi(datacite.doi)
                         except Exception as e:
-                            self.message_user(request, f"Failed to publish DOI registry metadata: {e}. Updated locally only.", level=messages.WARNING)
+                            self.message_user(request, f"Failed to publish to DataCite registry: {e}. Status was NOT updated.", level=messages.ERROR)
+                            datacite.status = original_status
+                            publish_failed = True
                     else:
-                        self.message_user(request, "DataCite API credentials not configured. Updated locally only.", level=messages.WARNING)
-                datacite.save()
-                datacite.rebuild_local_files(request=request)
-                self.message_user(request, "DataCite status updated successfully.")
-                return redirect('admin:curtain_datacite_changelist')
+                        self.message_user(request, "DataCite API credentials not configured. Status updated locally to Published.", level=messages.WARNING)
+
+                if not publish_failed:
+                    datacite.save()
+                    datacite.rebuild_local_files(request=request)
+                    self.message_user(request, "DataCite status updated successfully.")
+                    return redirect('admin:curtain_datacite_changelist')
+                else:
+                    form.initial['status'] = original_status
         else:
             initial_data = {
                 'schemaVersion': form_data.get('schemaVersion', ''),
