@@ -1,5 +1,5 @@
 from datacite import DataCiteRESTClient
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin.exceptions import NotRegistered
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
@@ -1096,13 +1096,19 @@ class DataCiteAdmin(admin.ModelAdmin):
             if form.is_valid() and creators_formset.is_valid() and titles_formset.is_valid():
                 datacite = form.save(commit=False)
                 if datacite.status == 'published':
-                    client = DataCiteRESTClient(
-                        username=settings.DATACITE_USERNAME,
-                        password=settings.DATACITE_PASSWORD,
-                        prefix=settings.DATACITE_PREFIX,
-                        test_mode=settings.DATACITE_TEST_MODE
-                    )
-                    client.show_doi(datacite.doi)
+                    if settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
+                        try:
+                            client = DataCiteRESTClient(
+                                username=settings.DATACITE_USERNAME,
+                                password=settings.DATACITE_PASSWORD,
+                                prefix=settings.DATACITE_PREFIX,
+                                test_mode=settings.DATACITE_TEST_MODE
+                            )
+                            client.show_doi(datacite.doi)
+                        except Exception as e:
+                            self.message_user(request, f"Failed to publish DOI registry metadata: {e}. Updated locally only.", level=messages.WARNING)
+                    else:
+                        self.message_user(request, "DataCite API credentials not configured. Updated locally only.", level=messages.WARNING)
                 datacite.save()
                 datacite.rebuild_local_files(request=request)
                 self.message_user(request, "DataCite status updated successfully.")
@@ -1149,21 +1155,34 @@ class DataCiteAdmin(admin.ModelAdmin):
         return render(request, 'admin/review_datacite.html', context)
 
     def approve_datacite(self, request, queryset):
+        success_count = 0
+        error_messages = []
         for datacite in queryset:
             datacite.rebuild_local_files(request=request)
-            client = DataCiteRESTClient(
-                username=settings.DATACITE_USERNAME,
-                password=settings.DATACITE_PASSWORD,
-                prefix=settings.DATACITE_PREFIX,
-                test_mode=settings.DATACITE_TEST_MODE
-            )
-            client.show_doi(datacite.doi)
+            if settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
+                try:
+                    client = DataCiteRESTClient(
+                        username=settings.DATACITE_USERNAME,
+                        password=settings.DATACITE_PASSWORD,
+                        prefix=settings.DATACITE_PREFIX,
+                        test_mode=settings.DATACITE_TEST_MODE
+                    )
+                    client.show_doi(datacite.doi)
+                except Exception as e:
+                    error_messages.append(f"DOI {datacite.doi or datacite.id} registry error: {e}")
+            else:
+                error_messages.append(f"DOI {datacite.doi or datacite.id} not synced to registry (credentials not configured).")
+
             datacite.status = 'published'
             datacite.save()
-
             datacite.send_notification()
-        self.message_user(request, "Selected DataCite(s) approved successfully.")
+            success_count += 1
 
+        if success_count > 0:
+            self.message_user(request, f"Successfully approved {success_count} DataCite object(s) locally.")
+        if error_messages:
+            for err in error_messages:
+                self.message_user(request, err, level=messages.WARNING)
 
     approve_datacite.short_description = "Approve selected DataCite(s)"
 
