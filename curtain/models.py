@@ -253,41 +253,44 @@ class DataCite(models.Model):
             fail_silently=False,
         )
 
-    def rebuild_local_files(self, request=None, update_doi_api=False):
+    def rebuild_local_files(self, request=None, update_doi_api=True):
         """
         Rebuilds the local file (copy of main curtain file), local storage for collection sessions,
         collection metadata JSON, and updates alternateIdentifiers list.
         """
-        # If collection is not set, try to find a collection that the curtain is associated with.
+        print(f"[DataCite Rebuild] Starting rebuild for DataCite ID: {self.id}")
+
         if not self.collection and self.curtain:
-            # Try to find a collection associated with the curtain main session.
-            # We can prioritize the collections owned by the DataCite user first.
             collection = self.curtain.collections.filter(owner=self.user).first()
             if not collection:
                 collection = self.curtain.collections.first()
             if collection:
                 self.collection = collection
                 self.save(update_fields=['collection'])
+                print(f"[DataCite Rebuild] Auto-detected collection: {self.collection.id}")
 
-        # 1. Rebuild main local_file from curtain
         if self.curtain and self.curtain.file:
+            print(f"[DataCite Rebuild] Rebuilding main local file from curtain file: {self.curtain.file.name}")
             if self.local_file:
-                # Delete existing file from local storage to prevent duplicate names
                 try:
                     self.local_file.delete(save=False)
-                except Exception:
-                    pass
-            filename = self.curtain.file.name
+                except Exception as e:
+                    print(f"[DataCite Rebuild] Warning: Could not delete old local_file: {e}")
+            
+            filename = self.curtain.file.name.split('/')[-1]
             if not filename.endswith('.json'):
                 filename = f"{filename}.json"
+            
             self.local_file.save(
                 filename,
                 self.curtain.file,
                 save=False
             )
             self.save(update_fields=['local_file'])
+            print(f"[DataCite Rebuild] Saved main local file as: {self.local_file.name}")
+        else:
+            print("[DataCite Rebuild] No main curtain file to copy.")
 
-        # Get file URL
         if self.local_file:
             file_path = reverse('datacite_file', kwargs={'datacite_id': self.id})
             if settings.SITE_DOMAIN:
@@ -299,12 +302,10 @@ class DataCite(models.Model):
         else:
             file_url = None
 
-        # Re-initialize or copy form_data
         form_data = self.form_data or {}
         if "alternateIdentifiers" not in form_data:
             form_data["alternateIdentifiers"] = []
         else:
-            # Filter out existing alternate identifiers that we will rebuild
             form_data["alternateIdentifiers"] = [
                 ident for ident in form_data["alternateIdentifiers"]
                 if ident.get("alternateIdentifierType") not in [
@@ -315,7 +316,6 @@ class DataCite(models.Model):
                 ]
             ]
 
-        # Add main session identifier
         if file_url:
             identifier_type = "Curtain Main Session Data" if self.collection else "Direct data access URL"
             form_data["alternateIdentifiers"].append({
@@ -323,37 +323,49 @@ class DataCite(models.Model):
                 "alternateIdentifierType": identifier_type
             })
 
-        # 2. Rebuild collection files and metadata JSON
         if self.collection:
+            print(f"[DataCite Rebuild] Processing collection ID: {self.collection.id} ({self.collection.name})")
             collection_metadata = {
                 "collection_id": self.collection.id,
                 "collection_name": self.collection.name,
                 "collection_description": self.collection.description,
                 "main_session": {
                     "curtain_id": self.curtain.id if self.curtain else None,
-                    "link_id": self.curtain.link_id if self.curtain else None
+                    "link_id": str(self.curtain.link_id) if (self.curtain and self.curtain.link_id) else None
                 },
                 "sessions": []
             }
 
             collection_sessions = self.collection.curtains.filter(enable=True)
+            if not collection_sessions.exists():
+                collection_sessions = self.collection.curtains.all()
+                print(f"[DataCite Rebuild] No enabled curtains found, falling back to all curtains (count: {collection_sessions.count()})")
+            else:
+                print(f"[DataCite Rebuild] Found {collection_sessions.count()} enabled curtains in collection")
+
             if self.curtain:
                 collection_sessions = collection_sessions.exclude(id=self.curtain.id)
 
             local_storage = DataCiteLocalStorage()
             for curtain_session in collection_sessions:
                 if not curtain_session.file:
+                    print(f"[DataCite Rebuild] Warning: Curtain session {curtain_session.id} has no file, skipping")
                     continue
+                
                 base_filename = curtain_session.file.name.split('/')[-1]
                 if not base_filename.endswith('.json'):
                     base_filename = f"{base_filename}.json"
-                filename = f"collection_{self.collection.id}_{curtain_session.id}_{base_filename}"
+                
+                filename = f"datacite_files/collection_{self.collection.id}_{curtain_session.id}_{base_filename}"
+                
                 if local_storage.exists(filename):
                     try:
                         local_storage.delete(filename)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"[DataCite Rebuild] Warning: Could not delete old collection file {filename}: {e}")
+                
                 saved_name = local_storage.save(filename, curtain_session.file)
+                print(f"[DataCite Rebuild] Saved alternative session file: {saved_name}")
 
                 if settings.SITE_DOMAIN:
                     session_file_url = f"{settings.SITE_DOMAIN.rstrip('/')}{local_storage.url(saved_name)}"
@@ -369,7 +381,7 @@ class DataCite(models.Model):
 
                 collection_metadata["sessions"].append({
                     "curtain_id": curtain_session.id,
-                    "link_id": curtain_session.link_id,
+                    "link_id": str(curtain_session.link_id) if curtain_session.link_id else None,
                     "data_url": session_file_url,
                     "name": curtain_session.name,
                     "description": curtain_session.description
@@ -378,28 +390,36 @@ class DataCite(models.Model):
             collection_json = json.dumps(collection_metadata, indent=2)
             collection_json_file = io.BytesIO(collection_json.encode('utf-8'))
 
-            collection_json_filename = f"collection_{self.collection.id}_metadata.json"
-            os.makedirs(os.path.join(settings.MEDIA_ROOT, 'datacite_files'), exist_ok=True)
-            with open(os.path.join(settings.MEDIA_ROOT, 'datacite_files', collection_json_filename), 'wb') as f:
-                f.write(collection_json_file.getvalue())
+            collection_json_filename = f"datacite_files/collection_{self.collection.id}_metadata.json"
+            if local_storage.exists(collection_json_filename):
+                try:
+                    local_storage.delete(collection_json_filename)
+                except Exception as e:
+                    print(f"[DataCite Rebuild] Warning: Could not delete old metadata JSON {collection_json_filename}: {e}")
+            
+            saved_metadata_name = local_storage.save(collection_json_filename, collection_json_file)
+            print(f"[DataCite Rebuild] Saved collection metadata JSON: {saved_metadata_name}")
 
             if settings.SITE_DOMAIN:
-                collection_metadata_url = f"{settings.SITE_DOMAIN.rstrip('/')}/media/datacite_files/{collection_json_filename}"
+                collection_metadata_url = f"{settings.SITE_DOMAIN.rstrip('/')}{local_storage.url(saved_metadata_name)}"
             elif request:
-                collection_metadata_url = request.build_absolute_uri(f"/media/datacite_files/{collection_json_filename}")
+                collection_metadata_url = request.build_absolute_uri(local_storage.url(saved_metadata_name))
             else:
-                collection_metadata_url = f"http://localhost:8000/media/datacite_files/{collection_json_filename}"
+                collection_metadata_url = f"http://localhost:8000{local_storage.url(saved_metadata_name)}"
 
             form_data["alternateIdentifiers"].append({
                 "alternateIdentifier": collection_metadata_url,
                 "alternateIdentifierType": "Curtain Collection Metadata"
             })
+        else:
+            print("[DataCite Rebuild] No collection assigned to this DataCite object.")
 
         self.form_data = form_data
         self.save(update_fields=['form_data'])
+        print(f"[DataCite Rebuild] Finished rebuild for DataCite ID: {self.id}")
 
-        # 3. Optionally update the DOI on DataCite API
         if update_doi_api and self.doi and settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
+            print(f"[DataCite Rebuild] Updating DOI registry metadata for DOI: {self.doi}")
             try:
                 client = DataCiteRESTClient(
                     username=settings.DATACITE_USERNAME,
@@ -410,8 +430,9 @@ class DataCite(models.Model):
                 client.update_doi(doi=self.doi, metadata=self.form_data)
                 if self.status == 'published':
                     client.show_doi(doi=self.doi)
-            except Exception:
-                pass
+                print("[DataCite Rebuild] DOI registry metadata updated successfully.")
+            except Exception as e:
+                print(f"[DataCite Rebuild] Error updating DOI registry: {e}")
 
 class LastAccess(models.Model):
     """

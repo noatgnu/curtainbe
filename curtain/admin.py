@@ -41,7 +41,6 @@ class BatchAddToCollectionForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from .models import CurtainCollection
         self.fields['collection'].queryset = CurtainCollection.objects.all()
 
 
@@ -1007,6 +1006,10 @@ class DataCiteAdmin(admin.ModelAdmin):
         }),
     )
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        obj.rebuild_local_files(request=request)
+
     def title_preview(self, obj):
         if obj.title:
             return str(obj.title)[:50] + '...' if len(str(obj.title)) > 50 else str(obj.title)
@@ -1101,6 +1104,7 @@ class DataCiteAdmin(admin.ModelAdmin):
                     )
                     client.show_doi(datacite.doi)
                 datacite.save()
+                datacite.rebuild_local_files(request=request)
                 self.message_user(request, "DataCite status updated successfully.")
                 return redirect('admin:curtain_datacite_changelist')
         else:
@@ -1146,6 +1150,7 @@ class DataCiteAdmin(admin.ModelAdmin):
 
     def approve_datacite(self, request, queryset):
         for datacite in queryset:
+            datacite.rebuild_local_files(request=request)
             client = DataCiteRESTClient(
                 username=settings.DATACITE_USERNAME,
                 password=settings.DATACITE_PASSWORD,

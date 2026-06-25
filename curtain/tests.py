@@ -314,3 +314,34 @@ class DataCiteViewSetsTest(TestCase):
         datacite_obj.refresh_from_db()
         self.assertTrue(bool(datacite_obj.local_file))
         self.assertEqual(datacite_obj.local_file.read(), b"main session content")
+
+    def test_rebuild_local_files_manually_assigned(self):
+        # Create a DataCite object initially without collection
+        datacite_obj = DataCite.objects.create(
+            user=self.user,
+            curtain=self.main_curtain,
+            title="Manual Test Title",
+            contact_email="test@example.com",
+            pii_statement="None"
+        )
+        
+        # Manually assign collection
+        datacite_obj.collection = self.collection
+        datacite_obj.save()
+        
+        # Verify it has no local_file or alternate identifiers initially
+        self.assertFalse(bool(datacite_obj.local_file))
+        
+        # Run rebuild
+        datacite_obj.rebuild_local_files(update_doi_api=False)
+        
+        # Verify files and alternate identifiers have been rebuilt successfully
+        datacite_obj.refresh_from_db()
+        self.assertTrue(bool(datacite_obj.local_file))
+        
+        alternate_ids = datacite_obj.form_data["alternateIdentifiers"]
+        alternate_id_types = [item["alternateIdentifierType"] for item in alternate_ids]
+        
+        self.assertIn("Curtain Main Session Data", alternate_id_types)
+        self.assertIn("Curtain Alternative Session Data", alternate_id_types)
+        self.assertIn("Curtain Collection Metadata", alternate_id_types)
