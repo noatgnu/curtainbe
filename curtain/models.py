@@ -258,7 +258,16 @@ class DataCite(models.Model):
         Rebuilds the local file (copy of main curtain file), local storage for collection sessions,
         collection metadata JSON, and updates alternateIdentifiers list.
         """
-
+        # If collection is not set, try to find a collection that the curtain is associated with.
+        if not self.collection and self.curtain:
+            # Try to find a collection associated with the curtain main session.
+            # We can prioritize the collections owned by the DataCite user first.
+            collection = self.curtain.collections.filter(owner=self.user).first()
+            if not collection:
+                collection = self.curtain.collections.first()
+            if collection:
+                self.collection = collection
+                self.save(update_fields=['collection'])
 
         # 1. Rebuild main local_file from curtain
         if self.curtain and self.curtain.file:
@@ -268,8 +277,11 @@ class DataCite(models.Model):
                     self.local_file.delete(save=False)
                 except Exception:
                     pass
+            filename = self.curtain.file.name
+            if not filename.endswith('.json'):
+                filename = f"{filename}.json"
             self.local_file.save(
-                self.curtain.file.name,
+                filename,
                 self.curtain.file,
                 save=False
             )
@@ -332,7 +344,10 @@ class DataCite(models.Model):
             for curtain_session in collection_sessions:
                 if not curtain_session.file:
                     continue
-                filename = f"collection_{self.collection.id}_{curtain_session.id}_{curtain_session.file.name.split('/')[-1]}"
+                base_filename = curtain_session.file.name.split('/')[-1]
+                if not base_filename.endswith('.json'):
+                    base_filename = f"{base_filename}.json"
+                filename = f"collection_{self.collection.id}_{curtain_session.id}_{base_filename}"
                 if local_storage.exists(filename):
                     try:
                         local_storage.delete(filename)

@@ -265,7 +265,6 @@ class DataCiteViewSetsTest(TestCase):
         datacite_obj = DataCite.objects.create(
             user=self.user,
             curtain=self.main_curtain,
-            collection=self.collection,
             title="Old Title",
             contact_email="test@example.com",
             pii_statement="None"
@@ -280,6 +279,7 @@ class DataCiteViewSetsTest(TestCase):
         
         # Refresh from db and verify files and alternate identifiers have been rebuilt successfully
         datacite_obj.refresh_from_db()
+        self.assertEqual(datacite_obj.collection, self.collection)
         self.assertTrue(bool(datacite_obj.local_file))
         self.assertEqual(datacite_obj.local_file.read(), b"main session content")
         
