@@ -331,7 +331,9 @@ class DataCite(models.Model):
                 "collection_description": self.collection.description,
                 "main_session": {
                     "curtain_id": self.curtain.id if self.curtain else None,
-                    "link_id": str(self.curtain.link_id) if (self.curtain and self.curtain.link_id) else None
+                    "link_id": str(self.curtain.link_id) if (self.curtain and self.curtain.link_id) else None,
+                    "name": self.curtain.name if self.curtain else None,
+                    "description": self.curtain.description if self.curtain else None
                 },
                 "sessions": []
             }
