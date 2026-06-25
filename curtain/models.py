@@ -418,6 +418,13 @@ class DataCite(models.Model):
         self.save(update_fields=['form_data'])
         print(f"[DataCite Rebuild] Finished rebuild for DataCite ID: {self.id}")
 
+        if self.status == 'published':
+            if self.curtain:
+                self.curtain.permanent = True
+                self.curtain.save(update_fields=["permanent"])
+            if self.collection:
+                self.collection.curtains.filter(permanent=False).update(permanent=True)
+
         if update_doi_api and self.doi and settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
             print(f"[DataCite Rebuild] Updating DOI registry metadata for DOI: {self.doi}")
             try:

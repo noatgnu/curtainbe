@@ -1237,28 +1237,31 @@ class DataCiteAdmin(admin.ModelAdmin):
         success_count = 0
         error_messages = []
         for datacite in queryset:
-            datacite.rebuild_local_files(request=request)
+            original_status = datacite.status
+            publish_success = False
             if settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
                 try:
-                    client = DataCiteRESTClient(
-                        username=settings.DATACITE_USERNAME,
-                        password=settings.DATACITE_PASSWORD,
-                        prefix=settings.DATACITE_PREFIX,
-                        test_mode=settings.DATACITE_TEST_MODE
-                    )
-                    client.show_doi(datacite.doi)
+                    datacite.status = 'published'
+                    datacite.save()
+                    datacite.rebuild_local_files(request=request)
+                    publish_success = True
                 except Exception as e:
+                    datacite.status = original_status
+                    datacite.save()
                     error_messages.append(f"DOI {datacite.doi or datacite.id} registry error: {e}")
             else:
+                datacite.status = 'published'
+                datacite.save()
+                datacite.rebuild_local_files(request=request)
+                publish_success = True
                 error_messages.append(f"DOI {datacite.doi or datacite.id} not synced to registry (credentials not configured).")
 
-            datacite.status = 'published'
-            datacite.save()
-            datacite.send_notification()
-            success_count += 1
+            if publish_success:
+                datacite.send_notification()
+                success_count += 1
 
         if success_count > 0:
-            self.message_user(request, f"Successfully approved {success_count} DataCite object(s) locally.")
+            self.message_user(request, f"Successfully approved and published {success_count} DataCite object(s) locally.")
         if error_messages:
             for err in error_messages:
                 self.message_user(request, err, level=messages.WARNING)
