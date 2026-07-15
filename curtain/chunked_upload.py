@@ -16,6 +16,7 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 
+from curtain.encryption import apply_encryption_request
 from curtain.models import Curtain
 from curtain.serializers import CurtainSerializer
 from curtain.permissions import IsNonUserPostAllow
@@ -368,7 +369,6 @@ class CurtainChunkedUploadView(ChunkedUploadView):
             enable = request.data.get("enable", "True" if not is_update else str(c.enable)) == "True"
             curtain_type = request.data.get("curtain_type", "TP" if not is_update else c.curtain_type)
             permanent = request.data.get("permanent", "True" if not is_update else str(c.permanent)) == "True"
-            encrypted = request.data.get("encrypted", "False" if not is_update else str(c.encrypted)) == "True"
             expiry_duration = request.data.get("expiry_duration")
 
             if permanent and not settings.CURTAIN_ALLOW_USER_SET_PERMANENT and not request.user.is_staff:
@@ -382,7 +382,7 @@ class CurtainChunkedUploadView(ChunkedUploadView):
             c.enable = enable
             c.curtain_type = curtain_type
             c.permanent = permanent
-            c.encrypted = encrypted
+            encryption_factors = apply_encryption_request(request.data, c)
 
             if uploaded_file._is_remote_storage():
                 temp_path = uploaded_file._get_temp_path()
@@ -407,6 +407,10 @@ class CurtainChunkedUploadView(ChunkedUploadView):
                 c.expiry_duration = timedelta(days=expiry_months * 30)
 
             c.save()
+
+            if encryption_factors is not None:
+                encryption_factors.curtain = c
+                encryption_factors.save()
 
             if not is_update:
                 if type(request.user) != AnonymousUser:

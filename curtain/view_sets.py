@@ -48,6 +48,7 @@ from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrary
     UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer, AnnouncementSerializer, PermanentLinkRequestSerializer, \
     CurtainCollectionSerializer
 from curtain.storage import DataCiteLocalStorage
+from curtain.encryption import apply_encryption_request
 from curtain.utils import is_user_staff, delete_file_related_objects, calculate_boxplot_parameters, \
     check_nan_return_none, get_uniprot_data, encrypt_data
 from curtain.validations import curtain_query_schema, kinase_library_query_schema, data_filter_list_query_schema
@@ -242,32 +243,15 @@ class CurtainViewSet(FiltersMixin, viewsets.ModelViewSet):
         return Response(data={"link_id": c.link_id, "token": ca.token})
 
     def encrypt_data(self, curtain):
-        if "encrypted" in self.request.data:
-            if self.request.data["encrypted"] == "True":
-                curtain.encrypted = True
-                if "e2e" in self.request.data:
-                    if self.request.data["e2e"] == "True":
-                        if "encryptedKey" in self.request.data and "encryptedIV" in self.request.data:
-                            factors = DataAESEncryptionFactors(encrypted_iv=self.request.data["encryptedIV"],
-                                                               encrypted_decryption_key=self.request.data[
-                                                                   "encryptedKey"])
-                            return factors
-                    else:
-                        return
-                # if type(self.request.user) != AnonymousUser:
-                #     public_key: UserPublicKey | None = UserPublicKey.objects.filter(user=self.request.user).first()
-                #     if public_key:
-                #         curtain.encrypted_with = public_key
-                #         encrypted = encrypt_data(public_key.public_key, self.request.data["file"].read())
-                #         curtain.file.save(str(curtain.link_id) + ".json",
-                #                           djangoFile(io.BytesIO(encrypted), name=str(curtain.link_id) + ".json"))
-                #else:
-                #    raise ValueError("No public key found")
-            else:
-                curtain.encrypted = False
+        """
+        Validates the client's encryption request and sets curtain.encrypted.
 
-        else:
-            return
+        Delegates to apply_encryption_request so this endpoint and the
+        chunked-upload endpoint enforce the same rule: encrypted is never set
+        to True unless a valid AES key and IV were actually submitted with
+        the request.
+        """
+        return apply_encryption_request(self.request.data, curtain)
 
     @action(methods=["get"], detail=True, permission_classes=[permissions.IsAdminUser | HasCurtainToken | IsCurtainOwnerOrPublic])
     def get_encryption_factors(self, request, **kwargs):
