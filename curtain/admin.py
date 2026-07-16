@@ -16,7 +16,7 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.db import models, transaction
 
 from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, ContributorForm, DescriptionForm, \
-    RightsForm, AlternateIdentifierForm, RelatedIdentifierForm, FundingReferenceForm
+    RightsForm, AlternateIdentifierForm, RelatedIdentifierForm, FundingReferenceForm, clean_datacite_form_data
 from .models import (
     DataCite, Curtain, DataFilterList, ExtraProperties, UserAPIKey, UserPublicKey,
     SocialPlatform, KinaseLibraryModel, CurtainAccessToken, DataAESEncryptionFactors,
@@ -980,6 +980,7 @@ class LastAccessAdmin(admin.ModelAdmin):
         extra_context['show_purge_link'] = True
         return super().changelist_view(request, extra_context=extra_context)
 
+
 class DataCiteAdmin(admin.ModelAdmin):
     list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'has_local_file', 'error_preview', 'edit_form_link', 'lock', 'created', 'updated')
     list_filter = ('status', 'lock', 'created', 'updated')
@@ -1261,6 +1262,9 @@ class DataCiteAdmin(admin.ModelAdmin):
                 continue
 
             if settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
+                form_data = clean_datacite_form_data(dict(datacite.form_data))
+                datacite.form_data = form_data
+                datacite.save(update_fields=["form_data"])
                 try:
                     client = DataCiteRESTClient(
                         username=settings.DATACITE_USERNAME,
@@ -1268,7 +1272,7 @@ class DataCiteAdmin(admin.ModelAdmin):
                         prefix=settings.DATACITE_PREFIX,
                         test_mode=settings.DATACITE_TEST_MODE
                     )
-                    client.update_doi(doi=datacite.doi, metadata=datacite.form_data)
+                    client.update_doi(doi=datacite.doi, metadata=form_data)
                     client.show_doi(doi=datacite.doi)
                 except Exception as e:
                     error_messages.append(f"DOI {datacite.doi}: DataCite API error — {e}")
@@ -1326,10 +1330,7 @@ class DataCiteAdmin(admin.ModelAdmin):
                 if not suffix:
                     error_messages_list.append(f"ID {datacite.id}: missing suffix in form_data.")
                     continue
-                form_data = dict(datacite.form_data)
-                for contributor in form_data.get("contributors", []):
-                    if "contributorType" not in contributor or not contributor["contributorType"]:
-                        contributor["contributorType"] = "Researcher"
+                form_data = clean_datacite_form_data(dict(datacite.form_data))
                 datacite.form_data = form_data
                 datacite.save(update_fields=["form_data"])
                 doi = client.draft_doi(

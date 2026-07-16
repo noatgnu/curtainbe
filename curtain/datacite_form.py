@@ -76,6 +76,28 @@ class RelatedIdentifierForm(forms.Form):
     schemeType = forms.CharField(required=False)
     resourceTypeGeneral = forms.CharField(required=False)
 
+def clean_datacite_form_data(form_data: dict) -> dict:
+    """
+    Strips invalid entries from form_data before sending to the DataCite API.
+
+    Removes relatedIdentifiers where any required enum field is empty, and
+    adds a default contributorType to contributors that are missing it.
+    """
+    if "relatedIdentifiers" in form_data:
+        form_data["relatedIdentifiers"] = [
+            ri for ri in form_data["relatedIdentifiers"]
+            if ri.get("relatedIdentifier") and ri.get("relatedIdentifierType") and ri.get("relationType")
+        ]
+        if not form_data["relatedIdentifiers"]:
+            del form_data["relatedIdentifiers"]
+
+    for contributor in form_data.get("contributors", []):
+        if not contributor.get("contributorType"):
+            contributor["contributorType"] = "Researcher"
+
+    return form_data
+
+
 class FundingReferenceForm(forms.Form):
     funderName = forms.CharField(required=False)
     funderIdentifier = forms.CharField(required=False)

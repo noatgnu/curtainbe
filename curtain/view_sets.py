@@ -44,6 +44,7 @@ from curtain.permissions import IsOwnerOrReadOnly, IsFileOwnerOrPublic, IsCurtai
     IsCurtainOwner, IsNonUserPostAllow, IsDataFilterListOwner, HasUserAPIKey, IsCollectionOwner, \
     IsAdminUserOrCurtainOwner
 from curtain.pydantic_models import DataCiteForm
+from curtain.datacite_form import clean_datacite_form_data
 from curtain.serializers import UserSerializer, CurtainSerializer, KinaseLibrarySerializer, DataFilterListSerializer, \
     UserPublicKeySerializer, UserAPIKeySerializer, DataCiteSerializer, AnnouncementSerializer, PermanentLinkRequestSerializer, \
     CurtainCollectionSerializer
@@ -849,7 +850,9 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                                 status=status.HTTP_400_BAD_REQUEST
                             )
                         try:
-                            client.update_doi(doi=data_cite.doi, metadata=data_cite.form_data)
+                            cleaned = clean_datacite_form_data(dict(data_cite.form_data))
+                            data_cite.form_data = cleaned
+                            client.update_doi(doi=data_cite.doi, metadata=cleaned)
                             client.show_doi(doi=data_cite.doi)
                         except Exception as e:
                             return Response(
