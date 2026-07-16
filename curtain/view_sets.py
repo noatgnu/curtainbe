@@ -852,8 +852,9 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         try:
                             cleaned = clean_datacite_form_data(dict(data_cite.form_data))
                             data_cite.form_data = cleaned
-                            client.update_doi(doi=data_cite.doi, metadata=cleaned)
-                            client.show_doi(doi=data_cite.doi)
+                            publish_payload = dict(cleaned)
+                            publish_payload["event"] = "publish"
+                            client.update_doi(doi=data_cite.doi, metadata=publish_payload)
                         except Exception as e:
                             return Response(
                                 data={"error": str(e)},
