@@ -843,7 +843,19 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         test_mode=settings.DATACITE_TEST_MODE
                     )
                     if data_cite.status == "published":
-                        client.show_doi(doi=data_cite.doi)
+                        if not data_cite.doi:
+                            return Response(
+                                data={"error": "No DOI registered. Use 'Retry draft DOI' before publishing."},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                        try:
+                            client.update_doi(doi=data_cite.doi, metadata=data_cite.form_data)
+                            client.show_doi(doi=data_cite.doi)
+                        except Exception as e:
+                            return Response(
+                                data={"error": str(e)},
+                                status=status.HTTP_502_BAD_GATEWAY
+                            )
                         if data_cite.curtain:
                             data_cite.curtain.permanent = True
                             data_cite.curtain.save(update_fields=["permanent"])

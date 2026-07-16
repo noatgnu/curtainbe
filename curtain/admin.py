@@ -1254,34 +1254,41 @@ class DataCiteAdmin(admin.ModelAdmin):
         success_count = 0
         error_messages = []
         for datacite in queryset:
-            original_status = datacite.status
-            publish_success = False
+            if not datacite.doi:
+                error_messages.append(
+                    f"ID {datacite.id} ({datacite.title or 'untitled'}): no DOI registered — use 'Retry draft DOI registration' first."
+                )
+                continue
+
             if settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD:
                 try:
-                    datacite.status = 'published'
-                    datacite.save()
-                    datacite.rebuild_local_files(request=request)
-                    publish_success = True
+                    client = DataCiteRESTClient(
+                        username=settings.DATACITE_USERNAME,
+                        password=settings.DATACITE_PASSWORD,
+                        prefix=settings.DATACITE_PREFIX,
+                        test_mode=settings.DATACITE_TEST_MODE
+                    )
+                    client.update_doi(doi=datacite.doi, metadata=datacite.form_data)
+                    client.show_doi(doi=datacite.doi)
                 except Exception as e:
-                    datacite.status = original_status
-                    datacite.save()
-                    error_messages.append(f"DOI {datacite.doi or datacite.id} registry error: {e}")
-            else:
-                datacite.status = 'published'
-                datacite.save()
-                datacite.rebuild_local_files(request=request)
-                publish_success = True
-                error_messages.append(f"DOI {datacite.doi or datacite.id} not synced to registry (credentials not configured).")
+                    error_messages.append(f"DOI {datacite.doi}: DataCite API error — {e}")
+                    continue
 
-            if publish_success:
-                datacite.send_notification()
-                success_count += 1
+            datacite.status = 'published'
+            if datacite.curtain:
+                datacite.curtain.permanent = True
+                datacite.curtain.save(update_fields=["permanent"])
+            if datacite.collection:
+                datacite.collection.curtains.filter(permanent=False).update(permanent=True)
+            datacite.save()
+            datacite.rebuild_local_files(request=request, update_doi_api=False)
+            datacite.send_notification()
+            success_count += 1
 
         if success_count > 0:
-            self.message_user(request, f"Successfully approved and published {success_count} DataCite object(s) locally.")
-        if error_messages:
-            for err in error_messages:
-                self.message_user(request, err, level=messages.WARNING)
+            self.message_user(request, f"Successfully published {success_count} DataCite object(s).")
+        for err in error_messages:
+            self.message_user(request, err, level=messages.ERROR)
 
     approve_datacite.short_description = "Approve selected DataCite(s)"
 
