@@ -340,12 +340,8 @@ class DataCite(models.Model):
                 "sessions": []
             }
 
-            collection_sessions = self.collection.curtains.filter(enable=True)
-            if not collection_sessions.exists():
-                collection_sessions = self.collection.curtains.all()
-                print(f"[DataCite Rebuild] No enabled curtains found, falling back to all curtains (count: {collection_sessions.count()})")
-            else:
-                print(f"[DataCite Rebuild] Found {collection_sessions.count()} enabled curtains in collection")
+            collection_sessions = self.collection.curtains.all()
+            print(f"[DataCite Rebuild] Found {collection_sessions.count()} curtains in collection")
 
             if self.curtain:
                 collection_sessions = collection_sessions.exclude(id=self.curtain.id)

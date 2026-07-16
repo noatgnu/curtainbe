@@ -1273,13 +1273,9 @@ class DataCiteAdmin(admin.ModelAdmin):
                         test_mode=settings.DATACITE_TEST_MODE
                     )
                     client.update_doi(doi=datacite.doi, metadata=form_data)
-                except Exception as e:
-                    error_messages.append(f"DOI {datacite.doi}: update_doi failed — {e}")
-                    continue
-                try:
                     client.show_doi(doi=datacite.doi)
                 except Exception as e:
-                    error_messages.append(f"DOI {datacite.doi}: show_doi failed — {e}")
+                    error_messages.append(f"DOI {datacite.doi}: DataCite API error — {e}")
                     continue
 
             datacite.status = 'published'
