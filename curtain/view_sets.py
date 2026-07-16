@@ -725,18 +725,15 @@ class DataCiteViewSets(viewsets.ModelViewSet):
         try:
             suffix = signer.unsign(self.request.data["token"], max_age=timedelta(minutes=30))
             form_data = self.request.data["form"]
-            # validate form data using pydantic
             try:
                 schema45.validate(data=form_data)
             except ValueError as e:
                 return Response(status=status.HTTP_400_BAD_REQUEST)
             link_id = self.request.data["linkID"]
-            #check if poster is owner of the curtain link id
             curtain = Curtain.objects.filter(link_id=link_id)
             if curtain.exists():
                 curtain = curtain.first()
                 if self.request.user.is_authenticated:
-                    # check if user has submitted more than the number of max datacite per user per day
                     user_datacite_count_today = DataCite.objects.filter(user=self.request.user, created__date=timezone.now().date()).count()
                     if user_datacite_count_today >= settings.DATACITE_MAX_DOI_PER_DAY_PER_USER:
                         return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -752,7 +749,6 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         if collection_id:
                             collection = CurtainCollection.objects.filter(id=collection_id).first()
                         else:
-                            # Try to find a collection that the curtain is associated with.
                             collection = curtain.collections.filter(owner=self.request.user).first()
                             if not collection:
                                 collection = curtain.collections.first()
@@ -768,17 +764,29 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         )
                         data_cite.save()
 
-                        # Rebuild all local files, collection files and collection metadata JSON
                         data_cite.rebuild_local_files(request=request)
                         form_data = data_cite.form_data
 
-                        doi = client.draft_doi(doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}",
-                                               metadata=form_data)
+                        try:
+                            doi = client.draft_doi(
+                                doi=f"{settings.DATACITE_PREFIX}/{form_data['suffix']}",
+                                metadata=form_data
+                            )
+                        except Exception as draft_error:
+                            error_text = str(draft_error)
+                            data_cite.status = "error"
+                            data_cite.error_message = error_text
+                            data_cite.save(update_fields=["status", "error_message"])
+                            return Response(
+                                data={"error": error_text},
+                                status=status.HTTP_502_BAD_GATEWAY
+                            )
+
                         data_cite.doi = doi
                         data_cite.status = "draft"
                         data_cite.save()
 
-                        return Response(data=DataCiteSerializer(data_cite, many=False).data,status=status.HTTP_201_CREATED)
+                        return Response(data=DataCiteSerializer(data_cite, many=False).data, status=status.HTTP_201_CREATED)
             return Response(status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)

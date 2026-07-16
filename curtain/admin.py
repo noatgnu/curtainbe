@@ -981,14 +981,14 @@ class LastAccessAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
 class DataCiteAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'has_local_file', 'lock', 'created', 'updated')
+    list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'has_local_file', 'error_preview', 'lock', 'created', 'updated')
     list_filter = ('status', 'lock', 'created', 'updated')
     search_fields = ('title', 'doi', 'user__username', 'contact_email', 'curtain__link_id')
-    readonly_fields = ('created', 'updated', 'doi', 'local_file', 'local_file_link')
+    readonly_fields = ('created', 'updated', 'doi', 'local_file', 'local_file_link', 'error_message')
     autocomplete_fields = ('user', 'curtain', 'collection')
     date_hierarchy = 'updated'
     list_per_page = 20
-    actions = ['approve_datacite', 'reject_datacite', 'unlock_datacite', 'rebuild_datacite_files']
+    actions = ['approve_datacite', 'reject_datacite', 'unlock_datacite', 'rebuild_datacite_files', 'retry_draft_doi']
 
     fieldsets = (
         ('Basic Information', {
@@ -1000,6 +1000,10 @@ class DataCiteAdmin(admin.ModelAdmin):
         ('Data', {
             'fields': ('curtain', 'collection', 'local_file', 'local_file_link', 'form_data', 'pii_statement'),
             'description': 'Select either a single curtain or a collection. If collection is selected, all enabled curtains in the collection will be included as relatedIdentifiers in DataCite metadata.'
+        }),
+        ('Error', {
+            'fields': ('error_message',),
+            'classes': ('collapse',)
         }),
         ('Timestamps', {
             'fields': ('created', 'updated'),
@@ -1022,7 +1026,8 @@ class DataCiteAdmin(admin.ModelAdmin):
             'pending': '#FFA500',
             'published': '#28a745',
             'draft': '#6c757d',
-            'rejected': '#dc3545'
+            'rejected': '#dc3545',
+            'error': '#dc3545',
         }
         color = colors.get(obj.status, '#6c757d')
         return format_html(
@@ -1031,6 +1036,13 @@ class DataCiteAdmin(admin.ModelAdmin):
             obj.get_status_display()
         )
     status_badge.short_description = 'Status'
+
+    def error_preview(self, obj):
+        if obj.error_message:
+            preview = obj.error_message[:60] + '...' if len(obj.error_message) > 60 else obj.error_message
+            return format_html('<span style="color: #dc3545;" title="{}">{}</span>', obj.error_message, preview)
+        return '-'
+    error_preview.short_description = 'Error'
 
     def doi_link(self, obj):
         if obj.doi:
@@ -1276,6 +1288,54 @@ class DataCiteAdmin(admin.ModelAdmin):
         self.message_user(request, f"Successfully rebuilt local files for {count} DataCite object(s).")
 
     rebuild_datacite_files.short_description = "Rebuild local files for selected DataCite(s)"
+
+    def retry_draft_doi(self, request, queryset):
+        """
+        Re-attempts draft_doi registration for objects that have no DOI (e.g., due to a previous API failure).
+        """
+        if not (settings.DATACITE_USERNAME and settings.DATACITE_PASSWORD):
+            self.message_user(request, "DataCite credentials not configured.", level=messages.ERROR)
+            return
+
+        success_count = 0
+        error_messages_list = []
+        for datacite in queryset.filter(doi__isnull=True):
+            if not datacite.form_data:
+                error_messages_list.append(f"ID {datacite.id}: no form_data, skipping.")
+                continue
+            try:
+                client = DataCiteRESTClient(
+                    username=settings.DATACITE_USERNAME,
+                    password=settings.DATACITE_PASSWORD,
+                    prefix=settings.DATACITE_PREFIX,
+                    test_mode=settings.DATACITE_TEST_MODE
+                )
+                suffix = datacite.form_data.get("suffix")
+                if not suffix:
+                    error_messages_list.append(f"ID {datacite.id}: missing suffix in form_data.")
+                    continue
+                doi = client.draft_doi(
+                    doi=f"{settings.DATACITE_PREFIX}/{suffix}",
+                    metadata=datacite.form_data
+                )
+                datacite.doi = doi
+                datacite.status = "draft"
+                datacite.error_message = None
+                datacite.save(update_fields=["doi", "status", "error_message"])
+                success_count += 1
+            except Exception as e:
+                error_text = str(e)
+                datacite.error_message = error_text
+                datacite.status = "error"
+                datacite.save(update_fields=["error_message", "status"])
+                error_messages_list.append(f"ID {datacite.id}: {error_text}")
+
+        if success_count:
+            self.message_user(request, f"Successfully registered draft DOI for {success_count} object(s).")
+        for err in error_messages_list:
+            self.message_user(request, err, level=messages.ERROR)
+
+    retry_draft_doi.short_description = "Retry draft DOI registration (no-DOI objects only)"
 
 admin.site.register(DataCite, DataCiteAdmin)
 

@@ -212,7 +212,8 @@ class DataCite(models.Model):
         ("pending", "Pending"),
         ("published", "Published"),
         ("draft", "Draft"),
-        ("rejected", "Rejected")
+        ("rejected", "Rejected"),
+        ("error", "Error"),
     ]
     status = models.CharField(max_length=10, choices=status_choices, default="pending")
     lock = models.BooleanField(default=True)
@@ -233,6 +234,7 @@ class DataCite(models.Model):
         null=True,
         help_text="Optional collection - if set, all curtain sessions in collection will be included as relatedIdentifiers"
     )
+    error_message = models.TextField(blank=True, null=True)
     local_file = models.FileField(
         upload_to="datacite_files/",
         storage=DataCiteLocalStorage,
