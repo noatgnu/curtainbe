@@ -76,19 +76,28 @@ class RelatedIdentifierForm(forms.Form):
     schemeType = forms.CharField(required=False)
     resourceTypeGeneral = forms.CharField(required=False)
 
+_RELATED_IDENTIFIER_OPTIONAL_ENUM_FIELDS = ("resourceTypeGeneral", "relatedMetadataScheme", "schemeType")
+
+
 def clean_datacite_form_data(form_data: dict) -> dict:
     """
     Strips invalid entries from form_data before sending to the DataCite API.
 
-    Removes relatedIdentifiers where any required enum field is empty, and
-    adds a default contributorType to contributors that are missing it.
+    Removes relatedIdentifiers where any required enum field is empty. For entries
+    that pass, removes optional enum fields that are empty strings (DataCite rejects
+    empty strings for enum fields even when the field is optional). Adds a default
+    contributorType to contributors that are missing it.
     """
     if "relatedIdentifiers" in form_data:
-        form_data["relatedIdentifiers"] = [
-            ri for ri in form_data["relatedIdentifiers"]
-            if ri.get("relatedIdentifier") and ri.get("relatedIdentifierType") and ri.get("relationType")
-        ]
-        if not form_data["relatedIdentifiers"]:
+        cleaned = []
+        for ri in form_data["relatedIdentifiers"]:
+            if not (ri.get("relatedIdentifier") and ri.get("relatedIdentifierType") and ri.get("relationType")):
+                continue
+            ri = {k: v for k, v in ri.items() if k not in _RELATED_IDENTIFIER_OPTIONAL_ENUM_FIELDS or v}
+            cleaned.append(ri)
+        if cleaned:
+            form_data["relatedIdentifiers"] = cleaned
+        else:
             del form_data["relatedIdentifiers"]
 
     for contributor in form_data.get("contributors", []):
