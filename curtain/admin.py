@@ -1272,8 +1272,9 @@ class DataCiteAdmin(admin.ModelAdmin):
                         prefix=settings.DATACITE_PREFIX,
                         test_mode=settings.DATACITE_TEST_MODE
                     )
-                    client.update_doi(doi=datacite.doi, metadata=form_data)
-                    client.show_doi(doi=datacite.doi)
+                    publish_payload = dict(form_data)
+                    publish_payload["event"] = "publish"
+                    client.update_doi(doi=datacite.doi, metadata=publish_payload)
                 except Exception as e:
                     error_messages.append(f"DOI {datacite.doi}: DataCite API error — {e}")
                     continue
