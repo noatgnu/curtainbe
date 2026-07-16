@@ -21,6 +21,31 @@ class SubjectForm(forms.Form):
     subjectScheme = forms.CharField(initial="OECD REVISED FIELD OF SCIENCE AND TECHNOLOGY (FOS) CLASSIFICATION IN THE FRASCATI MANUAL", required=False)
     valueUri = forms.URLField(initial="https://unstats.un.org/wiki/download/attachments/101354089/FOS.pdf?api=v2", required=False)
 
+CONTRIBUTOR_TYPE_CHOICES = [
+    ("", "---------"),
+    ("ContactPerson", "ContactPerson"),
+    ("DataCollector", "DataCollector"),
+    ("DataCurator", "DataCurator"),
+    ("DataManager", "DataManager"),
+    ("Distributor", "Distributor"),
+    ("Editor", "Editor"),
+    ("HostingInstitution", "HostingInstitution"),
+    ("Producer", "Producer"),
+    ("ProjectLeader", "ProjectLeader"),
+    ("ProjectManager", "ProjectManager"),
+    ("ProjectMember", "ProjectMember"),
+    ("RegistrationAgency", "RegistrationAgency"),
+    ("RegistrationAuthority", "RegistrationAuthority"),
+    ("RelatedPerson", "RelatedPerson"),
+    ("Researcher", "Researcher"),
+    ("ResearchGroup", "ResearchGroup"),
+    ("RightsHolder", "RightsHolder"),
+    ("Sponsor", "Sponsor"),
+    ("Supervisor", "Supervisor"),
+    ("WorkPackageLeader", "WorkPackageLeader"),
+    ("Other", "Other"),
+]
+
 class ContributorForm(forms.Form):
     name = forms.CharField(required=False)
     affiliation = forms.CharField(widget=forms.HiddenInput(), required=False)
@@ -28,6 +53,7 @@ class ContributorForm(forms.Form):
     familyName = forms.CharField(required=False)
     nameIdentifiers = forms.CharField(widget=forms.HiddenInput(), required=False)
     nameType = forms.CharField(initial="Personal", required=False)
+    contributorType = forms.ChoiceField(choices=CONTRIBUTOR_TYPE_CHOICES, initial="Researcher", required=False)
 
 class DescriptionForm(forms.Form):
     description = forms.CharField(widget=forms.Textarea, required=False)

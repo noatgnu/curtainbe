@@ -981,7 +981,7 @@ class LastAccessAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
 class DataCiteAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'has_local_file', 'error_preview', 'lock', 'created', 'updated')
+    list_display = ('id', 'title_preview', 'user', 'status_badge', 'doi_link', 'curtain_link', 'has_local_file', 'error_preview', 'edit_form_link', 'lock', 'created', 'updated')
     list_filter = ('status', 'lock', 'created', 'updated')
     search_fields = ('title', 'doi', 'user__username', 'contact_email', 'curtain__link_id')
     readonly_fields = ('created', 'updated', 'doi', 'local_file', 'local_file_link', 'error_message')
@@ -1043,6 +1043,11 @@ class DataCiteAdmin(admin.ModelAdmin):
             return format_html('<span style="color: #dc3545;" title="{}">{}</span>', obj.error_message, preview)
         return '-'
     error_preview.short_description = 'Error'
+
+    def edit_form_link(self, obj):
+        url = reverse('admin:review_datacite', args=[obj.id])
+        return format_html('<a class="button" href="{}">Edit Form</a>', url)
+    edit_form_link.short_description = 'Form Editor'
 
     def doi_link(self, obj):
         if obj.doi:
@@ -1223,11 +1228,11 @@ class DataCiteAdmin(admin.ModelAdmin):
                                                                              prefix='descriptions')
             rightsList_formset = formset_factory(RightsForm, extra=0)(initial=form_data.get('rightsList', []),
                                                                         prefix='rightsList')
-            alternateIdentifiers_formset = formset_factory(AlternateIdentifierForm, extra=0)(initial_data.get('alternateIdentifiers', []),
+            alternateIdentifiers_formset = formset_factory(AlternateIdentifierForm, extra=0)(initial=form_data.get('alternateIdentifiers', []),
                                                                         prefix='alternateIdentifiers')
-            related_identifiers_formset = formset_factory(RelatedIdentifierForm, extra=0)(initial_data.get('relatedIdentifiers', []),
+            related_identifiers_formset = formset_factory(RelatedIdentifierForm, extra=0)(initial=form_data.get('relatedIdentifiers', []),
                                                                         prefix='relatedIdentifiers')
-            fundingReferences_formset = formset_factory(FundingReferenceForm, extra=0)(initial_data.get('fundingReferences', []),
+            fundingReferences_formset = formset_factory(FundingReferenceForm, extra=0)(initial=form_data.get('fundingReferences', []),
                                                                         prefix='fundingReferences')
 
         context['form'] = form
@@ -1314,9 +1319,15 @@ class DataCiteAdmin(admin.ModelAdmin):
                 if not suffix:
                     error_messages_list.append(f"ID {datacite.id}: missing suffix in form_data.")
                     continue
+                form_data = dict(datacite.form_data)
+                for contributor in form_data.get("contributors", []):
+                    if "contributorType" not in contributor or not contributor["contributorType"]:
+                        contributor["contributorType"] = "Researcher"
+                datacite.form_data = form_data
+                datacite.save(update_fields=["form_data"])
                 doi = client.draft_doi(
                     doi=f"{settings.DATACITE_PREFIX}/{suffix}",
-                    metadata=datacite.form_data
+                    metadata=form_data
                 )
                 datacite.doi = doi
                 datacite.status = "draft"
