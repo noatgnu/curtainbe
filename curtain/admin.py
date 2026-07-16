@@ -1272,11 +1272,14 @@ class DataCiteAdmin(admin.ModelAdmin):
                         prefix=settings.DATACITE_PREFIX,
                         test_mode=settings.DATACITE_TEST_MODE
                     )
-                    publish_payload = dict(form_data)
-                    publish_payload["event"] = "publish"
-                    client.update_doi(doi=datacite.doi, metadata=publish_payload)
+                    client.update_doi(doi=datacite.doi, metadata=form_data)
                 except Exception as e:
-                    error_messages.append(f"DOI {datacite.doi}: DataCite API error — {e}")
+                    error_messages.append(f"DOI {datacite.doi}: update_doi failed — {e}")
+                    continue
+                try:
+                    client.show_doi(doi=datacite.doi)
+                except Exception as e:
+                    error_messages.append(f"DOI {datacite.doi}: show_doi failed — {e}")
                     continue
 
             datacite.status = 'published'
