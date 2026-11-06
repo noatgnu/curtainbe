@@ -12,6 +12,7 @@ from rest_framework import status
 from unittest.mock import patch, MagicMock
 from curtain.models import ExtraProperties, SocialPlatform, UserPublicKey, Curtain, CurtainCollection, DataCite
 from curtain.admin import DataCiteAdmin
+from curtain.datacite_form import clean_datacite_form_data, DEFAULT_PUBLISHER, DEFAULT_TYPES
 from curtainbe import settings
 
 
@@ -345,3 +346,37 @@ class DataCiteViewSetsTest(TestCase):
         self.assertIn("Curtain Main Session Data", alternate_id_types)
         self.assertIn("Curtain Alternative Session Data", alternate_id_types)
         self.assertIn("Curtain Collection Metadata", alternate_id_types)
+
+class CleanDataCiteFormDataTest(TestCase):
+
+    def test_restores_wiped_publisher_and_types(self):
+        cleaned = clean_datacite_form_data({"publisher": "", "types": "", "publicationYear": "2026"})
+        self.assertEqual(cleaned["publisher"], DEFAULT_PUBLISHER)
+        self.assertEqual(cleaned["types"], DEFAULT_TYPES)
+        self.assertEqual(cleaned["publicationYear"], "2026")
+
+    def test_parses_json_string_publisher_and_types(self):
+        publisher = {"name": "Other Publisher"}
+        types = {"resourceTypeGeneral": "Collection", "resourceType": "x"}
+        cleaned = clean_datacite_form_data({"publisher": '{"name": "Other Publisher"}', "types": '{"resourceTypeGeneral": "Collection", "resourceType": "x"}'})
+        self.assertEqual(cleaned["publisher"], publisher)
+        self.assertEqual(cleaned["types"], types)
+
+    def test_keeps_valid_publisher_and_types(self):
+        publisher = {"name": "Other Publisher"}
+        types = {"resourceTypeGeneral": "Collection", "resourceType": "x"}
+        cleaned = clean_datacite_form_data({"publisher": dict(publisher), "types": dict(types), "publicationYear": "2024"})
+        self.assertEqual(cleaned["publisher"], publisher)
+        self.assertEqual(cleaned["types"], types)
+        self.assertEqual(cleaned["publicationYear"], "2024")
+
+    def test_fixes_empty_description_type_and_drops_empty_descriptions(self):
+        cleaned = clean_datacite_form_data({"descriptions": [
+            {"description": "text", "descriptionType": ""},
+            {"description": "methods", "descriptionType": "Methods"},
+            {"description": "", "descriptionType": "Abstract"},
+        ]})
+        self.assertEqual(cleaned["descriptions"], [
+            {"description": "text", "descriptionType": "Other"},
+            {"description": "methods", "descriptionType": "Methods"},
+        ])

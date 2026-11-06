@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from django import forms
@@ -78,6 +79,20 @@ class RelatedIdentifierForm(forms.Form):
 
 _RELATED_IDENTIFIER_OPTIONAL_ENUM_FIELDS = ("resourceTypeGeneral", "relatedMetadataScheme", "schemeType")
 
+DESCRIPTION_TYPES = ("Abstract", "Methods", "SeriesInformation", "TableOfContents", "TechnicalInfo", "Other")
+
+DEFAULT_PUBLISHER = {
+    "name": "University of Dundee",
+    "publisherIdentifier": "https://ror.org/03h2bxq36",
+    "publisherIdentifierScheme": "ROR",
+    "schemeUri": "https://ror.org/",
+}
+
+DEFAULT_TYPES = {
+    "resourceTypeGeneral": "Dataset",
+    "resourceType": "Interactive visualization of differential analysis datasets",
+}
+
 
 def clean_datacite_form_data(form_data: dict) -> dict:
     """
@@ -86,8 +101,34 @@ def clean_datacite_form_data(form_data: dict) -> dict:
     Removes relatedIdentifiers where any required enum field is empty. For entries
     that pass, removes optional enum fields that are empty strings (DataCite rejects
     empty strings for enum fields even when the field is optional). Adds a default
-    contributorType to contributors that are missing it.
+    contributorType to contributors that are missing it, a default descriptionType to
+    descriptions that are missing it, and restores publisher, types and publicationYear
+    when they are empty or stored as JSON strings.
     """
+    for key in ("publisher", "types"):
+        value = form_data.get(key)
+        if isinstance(value, str) and value.strip():
+            try:
+                form_data[key] = json.loads(value)
+            except ValueError:
+                pass
+
+    publisher = form_data.get("publisher")
+    if not isinstance(publisher, dict) or not publisher.get("name"):
+        form_data["publisher"] = dict(DEFAULT_PUBLISHER)
+
+    types = form_data.get("types")
+    if not isinstance(types, dict) or not types.get("resourceTypeGeneral"):
+        form_data["types"] = dict(DEFAULT_TYPES)
+
+    if not form_data.get("publicationYear"):
+        form_data["publicationYear"] = str(datetime.now().year)
+
+    form_data["descriptions"] = [d for d in form_data.get("descriptions", []) if d.get("description")]
+    for description in form_data["descriptions"]:
+        if description.get("descriptionType") not in DESCRIPTION_TYPES:
+            description["descriptionType"] = "Other"
+
     if "relatedIdentifiers" in form_data:
         cleaned = []
         for ri in form_data["relatedIdentifiers"]:
