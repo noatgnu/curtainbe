@@ -1,4 +1,8 @@
+import csv
 import json
+import re
+import uuid
+from datetime import datetime, timedelta
 from datacite import DataCiteRESTClient
 from django.contrib import admin, messages
 from django.contrib.admin.exceptions import NotRegistered
@@ -14,6 +18,8 @@ from django.http import HttpResponse
 from django.utils.safestring import mark_safe
 from django.contrib.sites.shortcuts import get_current_site
 from django.db import models, transaction
+from django.db.models import Count, Max
+from django.utils import timezone
 
 from .datacite_form import DataCiteForm, CreatorForm, TitleForm, SubjectForm, ContributorForm, DescriptionForm, \
     RightsForm, AlternateIdentifierForm, RelatedIdentifierForm, FundingReferenceForm, clean_datacite_form_data
@@ -122,8 +128,6 @@ admin.site.index_title = 'Welcome to CurtainBE Administration'
 
 
 def admin_dashboard(request):
-    from django.utils import timezone
-    from datetime import timedelta
 
     total_curtains = Curtain.objects.count()
     total_users = User.objects.count()
@@ -207,7 +211,6 @@ class MultipleIDsFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         if self.value():
-            import re
             ids = re.split(r'[,\s\n]+', self.value().strip())
             ids = [id.strip() for id in ids if id.strip()]
             if ids:
@@ -239,8 +242,6 @@ class ExpiringSoonFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         if self.value():
-            from datetime import timedelta
-            from django.utils import timezone
             days = int(self.value())
             threshold = timezone.now() + timedelta(days=days)
             expiring_ids = []
@@ -270,8 +271,6 @@ class LastAccessFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         if self.value():
-            from datetime import timedelta
-            from django.utils import timezone
 
             if self.value() == 'never':
                 curtains_with_access = LastAccess.objects.values_list('curtain_id', flat=True).distinct()
@@ -550,7 +549,6 @@ class CurtainAdmin(admin.ModelAdmin):
     make_permanent.short_description = "Make selected curtains permanent"
 
     def extend_expiry_3_months(self, request, queryset):
-        from datetime import timedelta
         count = 0
         for curtain in queryset.filter(permanent=False):
             curtain.expiry_duration = timedelta(days=90)
@@ -560,7 +558,6 @@ class CurtainAdmin(admin.ModelAdmin):
     extend_expiry_3_months.short_description = "Extend expiry to 3 months"
 
     def extend_expiry_6_months(self, request, queryset):
-        from datetime import timedelta
         count = 0
         for curtain in queryset.filter(permanent=False):
             curtain.expiry_duration = timedelta(days=180)
@@ -579,7 +576,6 @@ class CurtainAdmin(admin.ModelAdmin):
     delete_expired_sessions.short_description = "Delete expired sessions (from selection)"
 
     def export_to_csv(self, request, queryset):
-        import csv
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="curtains_export.csv"'
         writer = csv.writer(response)
@@ -606,7 +602,6 @@ class CurtainAdmin(admin.ModelAdmin):
     duplicate_curtain.short_description = "Duplicate selected curtains (settings only)"
 
     def export_csv_view(self, request):
-        import csv
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="all_curtains_export.csv"'
         writer = csv.writer(response)
@@ -627,8 +622,6 @@ class CurtainAdmin(admin.ModelAdmin):
         return response
 
     def maintenance_view(self, request):
-        from datetime import timedelta
-        from django.utils import timezone
 
         if request.method == 'POST':
             action = request.POST.get('action')
@@ -676,7 +669,6 @@ class CurtainAdmin(admin.ModelAdmin):
         return render(request, 'admin/curtain/maintenance.html', context)
 
     def duplicate_curtain_view(self, request):
-        import uuid
         ids = request.GET.get('ids', '').split(',')
         curtains = Curtain.objects.filter(pk__in=ids)
 
@@ -888,31 +880,24 @@ class LastAccessAdmin(admin.ModelAdmin):
     curtain_link.short_description = 'Curtain'
 
     def purge_keep_latest(self, request, queryset):
-        from django.db.models import Max
         latest_per_curtain = LastAccess.objects.values('curtain').annotate(latest_id=Max('id')).values_list('latest_id', flat=True)
         count, _ = LastAccess.objects.exclude(id__in=list(latest_per_curtain)).delete()
         self.message_user(request, f"Purged {count} old access record(s), keeping only the latest for each curtain.")
     purge_keep_latest.short_description = "Purge all except latest per curtain"
 
     def purge_older_than_30_days(self, request, queryset):
-        from datetime import timedelta
-        from django.utils import timezone
         threshold = timezone.now() - timedelta(days=30)
         count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
         self.message_user(request, f"Purged {count} access record(s) older than 30 days.")
     purge_older_than_30_days.short_description = "Purge records older than 30 days"
 
     def purge_older_than_90_days(self, request, queryset):
-        from datetime import timedelta
-        from django.utils import timezone
         threshold = timezone.now() - timedelta(days=90)
         count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
         self.message_user(request, f"Purged {count} access record(s) older than 90 days.")
     purge_older_than_90_days.short_description = "Purge records older than 90 days"
 
     def purge_older_than_365_days(self, request, queryset):
-        from datetime import timedelta
-        from django.utils import timezone
         threshold = timezone.now() - timedelta(days=365)
         count, _ = LastAccess.objects.filter(last_access__lt=threshold).delete()
         self.message_user(request, f"Purged {count} access record(s) older than 1 year.")
@@ -926,9 +911,6 @@ class LastAccessAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def purge_view(self, request):
-        from datetime import timedelta
-        from django.utils import timezone
-        from django.db.models import Max, Count
 
         if request.method == 'POST':
             action = request.POST.get('action')
@@ -1149,10 +1131,11 @@ class DataCiteAdmin(admin.ModelAdmin):
                     'prefix': form.cleaned_data.get('prefix'),
                     'suffix': form.cleaned_data.get('suffix'),
                     'url': form.cleaned_data.get('url'),
-                    'publisher': safe_json_load(form.cleaned_data.get('publisher')),
-                    'publicationYear': form.cleaned_data.get('publicationYear'),
-                    'types': safe_json_load(form.cleaned_data.get('types')),
                 })
+                for key in ('publisher', 'publicationYear', 'types'):
+                    value = safe_json_load(form.cleaned_data.get(key))
+                    if value not in (None, '', {}):
+                        new_form_data[key] = value
 
                 # Helper to map validated formset entries back to lists of dicts
                 def get_cleaned_list(formset):
@@ -1216,6 +1199,9 @@ class DataCiteAdmin(admin.ModelAdmin):
                 'prefix': form_data.get('prefix', ''),
                 'suffix': form_data.get('suffix', ''),
                 'url': form_data.get('url', ''),
+                'publisher': json.dumps(form_data['publisher']) if form_data.get('publisher') else '',
+                'publicationYear': form_data.get('publicationYear') or str(datetime.now().year),
+                'types': json.dumps(form_data['types']) if form_data.get('types') else '',
             }
             form = DataCiteForm(instance=datacite, initial=initial_data)
             creators_formset = formset_factory(CreatorForm, extra=0)(initial=form_data.get('creators', []),
@@ -1706,32 +1692,24 @@ class RequestAdmin(admin.ModelAdmin):
         return False
 
     def purge_older_than_7_days(self, request, queryset):
-        from datetime import timedelta
-        from django.utils import timezone
         threshold = timezone.now() - timedelta(days=7)
         count, _ = Request.objects.filter(time__lt=threshold).delete()
         self.message_user(request, f"Purged {count} request log(s) older than 7 days.")
     purge_older_than_7_days.short_description = "Purge logs older than 7 days (all, not just selected)"
 
     def purge_older_than_30_days(self, request, queryset):
-        from datetime import timedelta
-        from django.utils import timezone
         threshold = timezone.now() - timedelta(days=30)
         count, _ = Request.objects.filter(time__lt=threshold).delete()
         self.message_user(request, f"Purged {count} request log(s) older than 30 days.")
     purge_older_than_30_days.short_description = "Purge logs older than 30 days (all, not just selected)"
 
     def purge_older_than_90_days(self, request, queryset):
-        from datetime import timedelta
-        from django.utils import timezone
         threshold = timezone.now() - timedelta(days=90)
         count, _ = Request.objects.filter(time__lt=threshold).delete()
         self.message_user(request, f"Purged {count} request log(s) older than 90 days.")
     purge_older_than_90_days.short_description = "Purge logs older than 90 days (all, not just selected)"
 
     def purge_older_than_365_days(self, request, queryset):
-        from datetime import timedelta
-        from django.utils import timezone
         threshold = timezone.now() - timedelta(days=365)
         count, _ = Request.objects.filter(time__lt=threshold).delete()
         self.message_user(request, f"Purged {count} request log(s) older than 1 year.")
@@ -1750,8 +1728,6 @@ class RequestAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def purge_view(self, request):
-        from datetime import timedelta
-        from django.utils import timezone
 
         if request.method == 'POST':
             action = request.POST.get('action')
