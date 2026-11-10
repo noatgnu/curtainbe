@@ -262,15 +262,6 @@ class DataCite(models.Model):
         """
         print(f"[DataCite Rebuild] Starting rebuild for DataCite ID: {self.id}")
 
-        if not self.collection and self.curtain:
-            collection = self.curtain.collections.filter(owner=self.user).first()
-            if not collection:
-                collection = self.curtain.collections.first()
-            if collection:
-                self.collection = collection
-                self.save(update_fields=['collection'])
-                print(f"[DataCite Rebuild] Auto-detected collection: {self.collection.id}")
-
         if self.curtain and self.curtain.file:
             print(f"[DataCite Rebuild] Rebuilding main local file from curtain file: {self.curtain.file.name}")
             if self.local_file:

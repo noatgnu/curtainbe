@@ -186,7 +186,7 @@ class DataCiteViewSetsTest(TestCase):
 
     @patch('curtain.view_sets.DataCiteRESTClient')
     @patch('curtain.view_sets.schema45')
-    def test_create_datacite_with_collection_associated(self, mock_schema, mock_client_class):
+    def test_create_datacite_without_collection_id_does_not_attach_collection(self, mock_schema, mock_client_class):
         # Setup mocks
         mock_schema.validate.return_value = True
         mock_client = MagicMock()
@@ -213,18 +213,17 @@ class DataCiteViewSetsTest(TestCase):
         response = self.client.post(url, payload, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["collection"], self.collection.id)
+        self.assertIsNone(response.data["collection"])
         
-        # Verify alternate identifiers in form_data contains alternative session and metadata
         datacite_obj = DataCite.objects.get(id=response.data["id"])
-        self.assertEqual(datacite_obj.collection, self.collection)
+        self.assertIsNone(datacite_obj.collection)
         
         alternate_ids = datacite_obj.form_data["alternateIdentifiers"]
         alternate_id_types = [item["alternateIdentifierType"] for item in alternate_ids]
         
-        self.assertIn("Curtain Main Session Data", alternate_id_types)
-        self.assertIn("Curtain Alternative Session Data", alternate_id_types)
-        self.assertIn("Curtain Collection Metadata", alternate_id_types)
+        self.assertIn("Direct data access URL", alternate_id_types)
+        self.assertNotIn("Curtain Alternative Session Data", alternate_id_types)
+        self.assertNotIn("Curtain Collection Metadata", alternate_id_types)
 
     @patch('curtain.view_sets.DataCiteRESTClient')
     @patch('curtain.view_sets.schema45')
@@ -280,16 +279,16 @@ class DataCiteViewSetsTest(TestCase):
         
         # Refresh from db and verify files and alternate identifiers have been rebuilt successfully
         datacite_obj.refresh_from_db()
-        self.assertEqual(datacite_obj.collection, self.collection)
+        self.assertIsNone(datacite_obj.collection)
         self.assertTrue(bool(datacite_obj.local_file))
         self.assertEqual(datacite_obj.local_file.read(), b"main session content")
         
         alternate_ids = datacite_obj.form_data["alternateIdentifiers"]
         alternate_id_types = [item["alternateIdentifierType"] for item in alternate_ids]
         
-        self.assertIn("Curtain Main Session Data", alternate_id_types)
-        self.assertIn("Curtain Alternative Session Data", alternate_id_types)
-        self.assertIn("Curtain Collection Metadata", alternate_id_types)
+        self.assertIn("Direct data access URL", alternate_id_types)
+        self.assertNotIn("Curtain Alternative Session Data", alternate_id_types)
+        self.assertNotIn("Curtain Collection Metadata", alternate_id_types)
 
     def test_rebuild_datacite_files_admin_action(self):
         # Instantiate model admin
@@ -346,6 +345,27 @@ class DataCiteViewSetsTest(TestCase):
         self.assertIn("Curtain Main Session Data", alternate_id_types)
         self.assertIn("Curtain Alternative Session Data", alternate_id_types)
         self.assertIn("Curtain Collection Metadata", alternate_id_types)
+
+    def test_rebuild_after_removing_collection_drops_collection_identifiers(self):
+        datacite_obj = DataCite.objects.create(
+            user=self.user,
+            curtain=self.main_curtain,
+            collection=self.collection,
+            title="Remove Collection Title",
+            contact_email="test@example.com",
+            pii_statement="None"
+        )
+        datacite_obj.rebuild_local_files(update_doi_api=False)
+
+        datacite_obj.collection = None
+        datacite_obj.save()
+        datacite_obj.rebuild_local_files(update_doi_api=False)
+
+        datacite_obj.refresh_from_db()
+        self.assertIsNone(datacite_obj.collection)
+        alternate_id_types = [item["alternateIdentifierType"] for item in datacite_obj.form_data["alternateIdentifiers"]]
+        self.assertEqual(alternate_id_types, ["Direct data access URL"])
+
 
 class CleanDataCiteFormDataTest(TestCase):
 

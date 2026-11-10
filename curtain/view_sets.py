@@ -749,10 +749,6 @@ class DataCiteViewSets(viewsets.ModelViewSet):
                         collection_id = self.request.data.get("collection") or self.request.data.get("collection_id")
                         if collection_id:
                             collection = CurtainCollection.objects.filter(id=collection_id).first()
-                        else:
-                            collection = curtain.collections.filter(owner=self.request.user).first()
-                            if not collection:
-                                collection = curtain.collections.first()
 
                         data_cite = DataCite(
                             user=self.request.user,

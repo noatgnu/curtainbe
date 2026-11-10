@@ -96,14 +96,9 @@ DEFAULT_TYPES = {
 
 def clean_datacite_form_data(form_data: dict) -> dict:
     """
-    Strips invalid entries from form_data before sending to the DataCite API.
-
-    Removes relatedIdentifiers where any required enum field is empty. For entries
-    that pass, removes optional enum fields that are empty strings (DataCite rejects
-    empty strings for enum fields even when the field is optional). Adds a default
-    contributorType to contributors that are missing it, a default descriptionType to
-    descriptions that are missing it, and restores publisher, types and publicationYear
-    when they are empty or stored as JSON strings.
+    Normalizes form_data for the DataCite API: drops incomplete relatedIdentifiers and
+    empty optional enum fields, drops empty descriptions, and fills defaults for
+    contributorType, descriptionType, publisher, types and publicationYear.
     """
     for key in ("publisher", "types"):
         value = form_data.get(key)
